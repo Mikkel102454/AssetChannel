@@ -1,0 +1,11 @@
+name: AssetChannel
+version: '${version}'
+
+main: nu.miguel.assetChannel.Main
+api-version: '26.2'
+load: POSTWORLD
+
+permissions:
+  assetchannel.command.test:
+    description: Allows AssetChannel pack and playback test commands
+    default: op

@@ -1,0 +1,236 @@
+package nu.miguel.assetChannel.util;
+
+import nu.miguel.assetChannel.Main;
+import ws.schild.jave.process.ffmpeg.DefaultFFMPEGLocator;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+/** Runs the bundled FFmpeg and caches deterministic audio conversions. */
+public final class Ffmpeg {
+    private static final String CACHE_VERSION = "audio-v2";
+    private static volatile String bundledExecutable;
+    private static final Object CACHE_LOCK = new Object();
+
+    private Ffmpeg() {}
+
+    /** Preserves the source channel layout for listener-relative playback. */
+    public static void transcodeListening(Path source, Path destination) throws IOException, InterruptedException {
+        // A valid unsplit Vorbis source already has exactly the format Minecraft needs.
+        // Keeping its original packets avoids a lossy second encode.
+        DurationCheck.requirePositiveVorbis(source);
+        Files.createDirectories(destination.getParent());
+        Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /** Produces mono audio so Minecraft can spatialize it. */
+    public static void transcodeMono(Path source, Path destination) throws IOException, InterruptedException {
+        transcode(source, destination, 1);
+    }
+
+    public static List<Path> splitListening(Path source, Path destinationRoot, double intervalSeconds)
+            throws IOException, InterruptedException {
+        return split(source, destinationRoot, intervalSeconds, 0);
+    }
+
+    public static List<Path> splitMono(Path source, Path destinationRoot, double intervalSeconds)
+            throws IOException, InterruptedException {
+        return split(source, destinationRoot, intervalSeconds, 1);
+    }
+
+    private static void transcode(Path source, Path destination, int channels)
+            throws IOException, InterruptedException {
+        List<String> audioArgs = encodeArguments(channels);
+        String key = cacheKey(source, "transcode", Integer.toString(channels), String.join("\u0000", audioArgs));
+        Path cached = cacheRoot().resolve(key + ".ogg");
+        Files.createDirectories(destination.getParent());
+
+        synchronized (CACHE_LOCK) {
+            if (!validOgg(cached)) {
+                Files.createDirectories(cached.getParent());
+                Path temporary = cached.resolveSibling(cached.getFileName() + ".tmp-" + UUID.randomUUID());
+                try {
+                    List<String> arguments = new ArrayList<>(List.of("-i", source.toAbsolutePath().toString(),
+                            "-map", "0:a:0", "-vn", "-map_metadata", "-1"));
+                    arguments.addAll(audioArgs);
+                    arguments.addAll(List.of("-f", "ogg"));
+                    arguments.add(temporary.toAbsolutePath().toString());
+                    run(arguments);
+                    moveAtomic(temporary, cached);
+                } finally {
+                    Files.deleteIfExists(temporary);
+                }
+            }
+        }
+        Files.copy(cached, destination, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private static List<Path> split(Path source, Path destinationRoot, double intervalSeconds, int channels)
+            throws IOException, InterruptedException {
+        List<String> audioArgs = encodeArguments(channels);
+        String key = cacheKey(source, "split", Double.toString(intervalSeconds), Integer.toString(channels),
+                String.join("\u0000", audioArgs));
+        Path cachedDirectory = cacheRoot().resolve(key);
+
+        synchronized (CACHE_LOCK) {
+            if (!validOggDirectory(cachedDirectory)) {
+                deleteTree(cachedDirectory);
+                Files.createDirectories(cachedDirectory.getParent());
+                Path temporary = cachedDirectory.resolveSibling(cachedDirectory.getFileName() + ".tmp-" + UUID.randomUUID());
+                Files.createDirectories(temporary);
+                try {
+                    List<String> arguments = new ArrayList<>(List.of("-i", source.toAbsolutePath().toString(),
+                            "-map", "0:a:0", "-vn", "-map_metadata", "-1"));
+                    arguments.addAll(audioArgs);
+                    arguments.addAll(List.of("-f", "segment", "-segment_time", Double.toString(intervalSeconds),
+                            "-reset_timestamps", "1", temporary.resolve("%04d.ogg").toAbsolutePath().toString()));
+                    run(arguments);
+                    if (!validOggDirectory(temporary)) throw new IOException("FFmpeg produced invalid audio segments");
+                    moveAtomic(temporary, cachedDirectory);
+                } finally {
+                    deleteTree(temporary);
+                }
+            }
+        }
+
+        Files.createDirectories(destinationRoot);
+        List<Path> result = new ArrayList<>();
+        for (Path cached : listOggs(cachedDirectory)) {
+            Path destination = destinationRoot.resolve(cached.getFileName().toString());
+            Files.copy(cached, destination, StandardCopyOption.REPLACE_EXISTING);
+            result.add(destination);
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<String> encodeArguments(int channels) {
+        int quality = Main.config == null ? 6 : Math.max(0, Math.min(10,
+                Main.config.getInt("music.ffmpeg.vorbis-quality", 6)));
+        List<String> result = new ArrayList<>();
+        if (channels > 0) result.addAll(List.of("-ac", Integer.toString(channels)));
+        result.addAll(List.of("-ar", "48000", "-c:a", "libvorbis", "-q:a", Integer.toString(quality)));
+        return result;
+    }
+
+    private static Path cacheRoot() {
+        if (Main.plugin != null) return Main.plugin.getDataPath().resolve("cache").resolve("audio");
+        return Path.of(System.getProperty("java.io.tmpdir"), "assetchannel-audio-cache");
+    }
+
+    private static String cacheKey(Path source, String... settings) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(CACHE_VERSION.getBytes(StandardCharsets.UTF_8));
+            for (String setting : settings) {
+                digest.update((byte) 0);
+                digest.update(setting.getBytes(StandardCharsets.UTF_8));
+            }
+            try (InputStream input = Files.newInputStream(source)) {
+                byte[] buffer = new byte[64 * 1024];
+                for (int read; (read = input.read(buffer)) >= 0;) digest.update(buffer, 0, read);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
+    private static List<Path> listOggs(Path folder) throws IOException {
+        if (!Files.isDirectory(folder)) return List.of();
+        try (var files = Files.list(folder)) {
+            return files.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".ogg"))
+                    .sorted().toList();
+        }
+    }
+
+    private static boolean validOgg(Path path) {
+        try {
+            return Files.isRegularFile(path) && Files.size(path) > 0 && !OggDurationReader.read(path).isZero();
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static final class DurationCheck {
+        private static void requirePositiveVorbis(Path path) throws IOException {
+            var duration = OggDurationReader.read(path);
+            if (duration.isZero() || duration.isNegative())
+                throw new IOException("Audio has no positive duration: " + path);
+        }
+    }
+
+    private static boolean validOggDirectory(Path directory) throws IOException {
+        List<Path> files = listOggs(directory);
+        return !files.isEmpty() && files.stream().allMatch(Ffmpeg::validOgg);
+    }
+
+    private static void moveAtomic(Path source, Path destination) throws IOException {
+        try {
+            Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(source, destination);
+        }
+    }
+
+    private static void deleteTree(Path root) {
+        if (!Files.exists(root)) return;
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
+        } catch (IOException ignored) {
+            // A later cache build uses a different UUID and is unaffected.
+        }
+    }
+
+    private static void run(List<String> arguments) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>(arguments.size() + 6);
+        command.add(executable());
+        command.add("-hide_banner");
+        command.add("-loglevel");
+        command.add("error");
+        command.add("-y");
+        command.addAll(arguments);
+
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        AtomicReference<byte[]> capturedOutput = new AtomicReference<>(new byte[0]);
+        Thread outputReader = Thread.ofVirtual().start(() -> {
+            try { capturedOutput.set(process.getInputStream().readAllBytes()); }
+            catch (IOException ignored) { }
+        });
+        long timeout = Math.max(1, Main.config == null ? 300
+                : Main.config.getLong("music.ffmpeg.timeout-seconds", 300));
+        boolean done = process.waitFor(timeout, TimeUnit.SECONDS);
+        if (!done) {
+            process.destroyForcibly();
+            outputReader.join();
+            throw new IOException("FFmpeg timed out after " + timeout + " seconds");
+        }
+        outputReader.join();
+        if (process.exitValue() != 0) {
+            String output = new String(capturedOutput.get(), StandardCharsets.UTF_8).trim();
+            throw new IOException("FFmpeg exited with code " + process.exitValue()
+                    + (output.isEmpty() ? "" : ": " + output));
+        }
+    }
+
+    private static String executable() {
+        String configured = Main.config == null ? "" : Main.config.getString("music.ffmpeg.executable", "");
+        if (configured != null && !configured.isBlank() && !configured.equalsIgnoreCase("bundled"))
+            return configured.trim();
+        String cached = bundledExecutable;
+        if (cached == null) {
+            synchronized (Ffmpeg.class) {
+                cached = bundledExecutable;
+                if (cached == null) bundledExecutable = cached = new DefaultFFMPEGLocator().getExecutablePath();
+            }
+        }
+        return cached;
+    }
+}

@@ -1,0 +1,289 @@
+package nu.miguel.assetChannel.api.internal;
+
+import net.kyori.adventure.key.Key;
+import nu.miguel.assetChannel.Main;
+import nu.miguel.assetChannel.api.*;
+import nu.miguel.assetChannel.asset.*;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.SoundCategory;
+import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitTask;
+
+import java.util.*;
+
+public final class AssetChannelApiImpl implements AssetChannelApi {
+    private Map<String, IconAsset> icons = Map.of();
+    private Map<String, FontAsset> fonts = Map.of();
+    private Map<String, SoundAsset> sounds = Map.of();
+    private Map<String, SoundtrackAsset> soundtracks = Map.of();
+    private Map<String, Music> musicModels = Map.of();
+    private Map<String, String> spatialSoundKeys = Map.of();
+    private final Map<UUID, MusicSessionImpl> sessions = new LinkedHashMap<>();
+    private final Map<UUID, MusicSessionImpl> playerSessions = new HashMap<>();
+    private final Set<UUID> packReady = new HashSet<>();
+    private BukkitTask musicTicker;
+
+    public void loadAssets(List<Asset> assets) {
+        requireMainThread();
+        Map<String, IconAsset> newIcons = new TreeMap<>();
+        Map<String, FontAsset> newFonts = new TreeMap<>();
+        Map<String, SoundAsset> newSounds = new TreeMap<>();
+        Map<String, SoundtrackAsset> newTracks = new TreeMap<>();
+        Map<String, Music> models = new HashMap<>();
+        Map<String, String> newSpatialSoundKeys = new HashMap<>();
+        for (Asset asset : assets) {
+            if (asset instanceof Icon icon) newIcons.put(icon.getId(), new IconAsset(icon.getId(),
+                    Key.key(Icon.FONT_KEY), icon.getCodePoint(), icon.getHeight(), icon.getAscent()));
+            else if (asset instanceof Font font) newFonts.put(font.getId(), new FontAsset(font.getId(), Key.key(font.getKey())));
+            else if (asset instanceof Sound sound) {
+                newSounds.put(sound.getId(), new SoundAsset(sound.getId(), Key.key(sound.getKey())));
+                newSpatialSoundKeys.put(sound.getId(), sound.getSpatialKey());
+            }
+            else if (asset instanceof Music music) {
+                Map<String, MusicStageAsset> stages = new LinkedHashMap<>();
+                music.getStages().forEach((stageId, stage) -> stages.put(stageId,
+                        new MusicStageAsset(stageId, stage.duration(), stage.segments().size(), stage.autoSplit())));
+                newTracks.put(music.getId(), new SoundtrackAsset(music.getId(), music.getDuration(),
+                        music.getSegments().size(), music.isAutoSplit(), music.getDefaultStage(), stages,
+                        music.isMuteVanillaMusic()));
+                models.put(music.getId(), music);
+            }
+        }
+        icons = Collections.unmodifiableMap(newIcons);
+        fonts = Collections.unmodifiableMap(newFonts);
+        sounds = Collections.unmodifiableMap(newSounds);
+        soundtracks = Collections.unmodifiableMap(newTracks);
+        musicModels = Map.copyOf(models);
+        spatialSoundKeys = Map.copyOf(newSpatialSoundKeys);
+    }
+
+    public void setPackReady(Player player, boolean ready) {
+        requireMainThread();
+        if (ready) packReady.add(player.getUniqueId()); else packReady.remove(player.getUniqueId());
+    }
+    public boolean isPackReady(UUID id) { return packReady.contains(id); }
+
+    public void onQuit(Player player) {
+        requireMainThread();
+        packReady.remove(player.getUniqueId());
+        MusicSessionImpl session = playerSessions.get(player.getUniqueId());
+        if (session != null) session.disconnect(player);
+    }
+
+    public void stopSessions() {
+        requireMainThread();
+        for (MusicSessionImpl session : List.copyOf(sessions.values())) session.stop();
+    }
+
+    void ensureMusicTicker() {
+        if (musicTicker != null) return;
+        musicTicker = Bukkit.getScheduler().runTaskTimer(Main.plugin, () -> {
+            for (MusicSessionImpl session : List.copyOf(sessions.values())) session.tick();
+        }, 0L, 1L);
+    }
+
+    void claim(Player player, MusicSessionImpl session) {
+        MusicSessionImpl previous = playerSessions.put(player.getUniqueId(), session);
+        if (previous != null && previous != session) previous.removePlayer(player);
+    }
+    void release(UUID player, MusicSessionImpl session) { playerSessions.remove(player, session); }
+    void closed(MusicSessionImpl session) {
+        sessions.remove(session.id(), session);
+        if (sessions.isEmpty() && musicTicker != null) {
+            musicTicker.cancel();
+            musicTicker = null;
+        }
+    }
+
+    @Override public Collection<IconAsset> icons() { return icons.values(); }
+    @Override public Collection<FontAsset> fonts() { return fonts.values(); }
+    @Override public Collection<SoundAsset> sounds() { return sounds.values(); }
+    @Override public Collection<SoundtrackAsset> soundtracks() { return soundtracks.values(); }
+    @Override public Optional<IconAsset> icon(String id) { return Optional.ofNullable(icons.get(normalize(id))); }
+    @Override public Optional<FontAsset> font(String id) { return Optional.ofNullable(fonts.get(normalize(id))); }
+    @Override public Optional<SoundAsset> sound(String id) { return Optional.ofNullable(sounds.get(normalize(id))); }
+    @Override public Optional<SoundtrackAsset> soundtrack(String id) { return Optional.ofNullable(soundtracks.get(normalize(id))); }
+
+    @Override public PlaybackResult playSound(Player player, String id, SoundCategory category, float volume, float pitch) {
+        return playSound(player, id, SoundOrigin.listenerRelative(), category, volume, pitch);
+    }
+    @Override public PlaybackResult playSound(Player player, String id, SoundOrigin origin, SoundCategory category,
+                                              float volume, float pitch) {
+        requireMainThread();
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(origin, "origin");
+        Objects.requireNonNull(category, "category");
+        SoundAsset asset = sounds.get(normalize(id));
+        if (asset == null) return PlaybackResult.UNKNOWN_ASSET;
+        String key = origin instanceof SoundOrigin.ListenerRelative
+                ? asset.key().asString() : spatialSoundKeys.getOrDefault(asset.id(), asset.key().asString());
+        return playKey(player, key, category, origin, volume, pitch);
+    }
+
+    @Override public BroadcastPlaybackResult broadcastSound(String id, SoundOrigin origin, SoundCategory category,
+                                                             float volume, float pitch) {
+        requireMainThread();
+        Objects.requireNonNull(origin, "origin");
+        Objects.requireNonNull(category, "category");
+        SoundAsset asset = sounds.get(normalize(id));
+        if (asset == null) return new BroadcastPlaybackResult(PlaybackResult.UNKNOWN_ASSET, Set.of(), Set.of());
+        SoundOrigin refreshed = refreshOrigin(origin);
+        double radius = 16.0 * Math.max(1.0f, volume);
+        double radiusSquared = radius * radius;
+        Set<UUID> played = new LinkedHashSet<>();
+        Set<UUID> notReady = new LinkedHashSet<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            SoundOrigin selected = selectOrigin(refreshed, player.getLocation());
+            Location source = sourceLocation(selected);
+            if (source == null) continue;
+            if (!player.getWorld().equals(source.getWorld()) || player.getLocation().distanceSquared(source) > radiusSquared) continue;
+            String key = selected instanceof SoundOrigin.ListenerRelative
+                    ? asset.key().asString() : spatialSoundKeys.getOrDefault(asset.id(), asset.key().asString());
+            PlaybackResult result = playKey(player, key, category, selected, volume, pitch);
+            if (result == PlaybackResult.PLAYED) played.add(player.getUniqueId());
+            else if (result == PlaybackResult.PACK_NOT_READY) notReady.add(player.getUniqueId());
+        }
+        return new BroadcastPlaybackResult(PlaybackResult.PLAYED, played, notReady);
+    }
+
+    PlaybackResult playKey(Player player, String key, SoundCategory category, SoundOrigin origin,
+                           float volume, float pitch) {
+        if (!packReady.contains(player.getUniqueId())) return PlaybackResult.PACK_NOT_READY;
+        SoundOrigin refreshed = refreshOrigin(origin);
+        refreshed = selectOrigin(refreshed, player.getLocation());
+        if (refreshed == null) return PlaybackResult.SOURCE_UNAVAILABLE;
+        if (refreshed instanceof SoundOrigin.ListenerRelative) {
+            player.playSound(player, key, category, volume, pitch);
+            return PlaybackResult.PLAYED;
+        }
+        if (refreshed instanceof SoundOrigin.EntityOrigin entityOrigin) {
+            org.bukkit.entity.Entity entity = Bukkit.getEntity(entityOrigin.entityId());
+            if (entity != null && entity.isValid()) {
+                if (!player.getWorld().equals(entity.getWorld())) return PlaybackResult.SOURCE_UNAVAILABLE;
+                player.playSound(entity, key, category, volume, pitch);
+                return PlaybackResult.PLAYED;
+            }
+            refreshed = entityOrigin.fallback();
+        }
+        SoundOrigin.Fixed fixed = (SoundOrigin.Fixed) refreshed;
+        if (!player.getWorld().equals(fixed.world())) return PlaybackResult.SOURCE_UNAVAILABLE;
+        player.playSound(fixed.location(), key, category, volume, pitch);
+        return PlaybackResult.PLAYED;
+    }
+
+    PlaybackResult playKeyAtAllSpeakers(Player player, String key, SoundCategory category,
+                                        SoundOrigin origin, float volume, float pitch) {
+        if (!(origin instanceof SoundOrigin.Speakers speakers))
+            return playKey(player, key, category, origin, volume, pitch);
+        if (!packReady.contains(player.getUniqueId())) return PlaybackResult.PACK_NOT_READY;
+
+        SoundOrigin refreshed = refreshOrigin(speakers);
+        List<SoundOrigin> available = speakersInWorld((SoundOrigin.Speakers) refreshed,
+                player.getWorld());
+        if (available.isEmpty()) return PlaybackResult.SOURCE_UNAVAILABLE;
+
+        for (SoundOrigin speaker : available)
+            playKey(player, key, category, speaker, volume, pitch);
+        return PlaybackResult.PLAYED;
+    }
+
+    List<SoundOrigin> speakersInWorld(SoundOrigin.Speakers speakers, org.bukkit.World world) {
+        List<SoundOrigin> available = new ArrayList<>();
+        for (SoundOrigin speaker : speakers.origins()) {
+            Location source = sourceLocation(speaker);
+            if (source == null || !source.getWorld().equals(world)) continue;
+            available.add(speaker instanceof SoundOrigin.EntityOrigin ? SoundOrigin.fixed(source) : speaker);
+        }
+        return List.copyOf(available);
+    }
+
+    SoundOrigin refreshOrigin(SoundOrigin origin) {
+        if (origin instanceof SoundOrigin.Speakers speakers) {
+            return SoundOrigin.speakers(speakers.origins().stream().map(this::refreshOrigin).toList());
+        }
+        if (origin instanceof SoundOrigin.EntityOrigin entityOrigin) {
+            org.bukkit.entity.Entity entity = Bukkit.getEntity(entityOrigin.entityId());
+            if (entity != null && entity.isValid()) return new SoundOrigin.EntityOrigin(entityOrigin.entityId(), SoundOrigin.fixed(entity.getLocation()));
+        }
+        return origin;
+    }
+
+    SoundOrigin selectOrigin(SoundOrigin origin, Location listener) {
+        if (!(origin instanceof SoundOrigin.Speakers speakers)) return origin;
+        SoundOrigin closest = null;
+        double closestDistance = Double.POSITIVE_INFINITY;
+        for (SoundOrigin candidate : speakers.origins()) {
+            Location source = sourceLocation(candidate);
+            if (source == null || !source.getWorld().equals(listener.getWorld())) continue;
+            double distance = listener.distanceSquared(source);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                // Marker entities are server-side positioning helpers and are not
+                // guaranteed to be tracked by the client. Grouped entity speakers
+                // therefore emit from their current coordinates instead of by ID.
+                closest = candidate instanceof SoundOrigin.EntityOrigin
+                        ? SoundOrigin.fixed(source) : candidate;
+            }
+        }
+        return closest;
+    }
+
+    private Location sourceLocation(SoundOrigin origin) {
+        if (origin instanceof SoundOrigin.Fixed fixed) return fixed.location();
+        if (origin instanceof SoundOrigin.EntityOrigin entityOrigin) {
+            org.bukkit.entity.Entity entity = Bukkit.getServer() == null
+                    ? null : Bukkit.getEntity(entityOrigin.entityId());
+            return entity != null && entity.isValid() ? entity.getLocation() : entityOrigin.fallback().location();
+        }
+        return null;
+    }
+    @Override public boolean stopSound(Player player, String id) {
+        requireMainThread();
+        Objects.requireNonNull(player, "player");
+        SoundAsset asset = sounds.get(normalize(id));
+        if (asset == null) return false;
+        player.stopSound(asset.key().asString());
+        player.stopSound(spatialSoundKeys.getOrDefault(asset.id(), asset.key().asString()));
+        return true;
+    }
+    @Override public boolean stopSound(Player player, String id, SoundCategory category) {
+        requireMainThread();
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(category, "category");
+        SoundAsset asset = sounds.get(normalize(id));
+        if (asset == null) return false;
+        player.stopSound(asset.key().asString(), category);
+        player.stopSound(spatialSoundKeys.getOrDefault(asset.id(), asset.key().asString()), category);
+        return true;
+    }
+    @Override public void stopAllSounds(Player player) {
+        requireMainThread();
+        Objects.requireNonNull(player, "player");
+        for (SoundAsset sound : sounds.values()) {
+            player.stopSound(sound.key().asString());
+            player.stopSound(spatialSoundKeys.getOrDefault(sound.id(), sound.key().asString()));
+        }
+    }
+
+    @Override public MusicSession startSoundtrack(String id, Collection<? extends Player> players, SessionSettings settings) {
+        requireMainThread();
+        Objects.requireNonNull(settings, "settings");
+        String normalized = normalize(id);
+        Music model = musicModels.get(normalized);
+        if (model == null) throw new IllegalArgumentException("Unknown soundtrack: " + id);
+        if (players.isEmpty()) throw new IllegalArgumentException("A session requires at least one player");
+        MusicSessionImpl session = new MusicSessionImpl(this, soundtracks.get(normalized), model, settings);
+        sessions.put(session.id(), session);
+        for (Player player : players) session.addInitialPlayer(player);
+        session.start();
+        return session;
+    }
+    @Override public Optional<MusicSession> session(UUID id) { return Optional.ofNullable(sessions.get(id)); }
+    @Override public Collection<MusicSession> sessions() { return List.copyOf(sessions.values()); }
+
+    private static String normalize(String id) { return id.toLowerCase(Locale.ROOT); }
+    static void requireMainThread() {
+        if (!Bukkit.isPrimaryThread()) throw new IllegalStateException("AssetChannel API must be called from the server thread");
+    }
+}

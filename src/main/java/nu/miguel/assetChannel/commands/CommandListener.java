@@ -1,0 +1,372 @@
+package nu.miguel.assetChannel.commands;
+
+import com.mojang.brigadier.tree.LiteralCommandNode;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.plugin.lifecycle.event.LifecycleEventManager;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+import org.bukkit.plugin.Plugin;
+import com.mojang.brigadier.arguments.*;
+import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
+import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
+import io.papermc.paper.command.brigadier.argument.resolvers.selector.EntitySelectorArgumentResolver;
+import io.papermc.paper.command.brigadier.argument.resolvers.FinePositionResolver;
+import io.papermc.paper.math.FinePosition;
+import nu.miguel.assetChannel.Main;
+import nu.miguel.assetChannel.api.*;
+import org.bukkit.SoundCategory;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.Entity;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.key.Key;
+import java.util.*;
+
+public class CommandListener {
+    private static final List<String> SOUND_CATEGORIES = Arrays.stream(SoundCategory.values())
+            .map(category -> category.name().toLowerCase(Locale.ROOT))
+            .toList();
+
+    public CommandListener(Plugin plugin) {
+        LifecycleEventManager<Plugin> lifecycleEventManager = plugin.getLifecycleManager();
+
+        lifecycleEventManager.registerEventHandler(LifecycleEvents.COMMANDS, commands -> {
+            commands.registrar().register(modelCommand());
+        });
+    }
+
+    private LiteralCommandNode<CommandSourceStack> modelCommand(){
+        return Commands.literal("asset")
+                .requires(ctx -> ctx.getSender().hasPermission("assetchannel.command.test"))
+                .then(Commands.literal("texturepack")
+                        .then(Commands.literal("generate")
+                                .executes(TextureCommand::generateTexturePack))
+                )
+                .then(iconCommands())
+                .then(fontCommands())
+                .then(soundCommands())
+                .then(musicCommands())
+                .build();
+
+    }
+
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> iconCommands() {
+        var id = Commands.argument("id", StringArgumentType.word())
+                .suggests((c, b) -> suggest(b, Main.getAssetApi().icons().stream().map(IconAsset::id).toList()));
+        var test = Commands.literal("test").then(id.executes(this::testIcon));
+        var info = Commands.literal("info").then(Commands.argument("id", StringArgumentType.word())
+                .suggests((c, b) -> suggest(b, Main.getAssetApi().icons().stream().map(IconAsset::id).toList()))
+                .executes(this::iconInfo));
+        var list = Commands.literal("list").executes(c -> {
+            Collection<IconAsset> icons = Main.getAssetApi().icons();
+            if (icons.isEmpty()) c.getSource().getSender().sendRichMessage("<yellow>No icons are loaded.");
+            for (IconAsset icon : icons) {
+                c.getSource().getSender().sendMessage(Component.text(icon.character()).font(icon.font())
+                        .append(Component.text(" " + icon.id() + " (" + icon.unicode() + ")")));
+            }
+            return icons.size();
+        });
+        return Commands.literal("icon").then(test).then(info).then(list);
+    }
+
+    private int testIcon(com.mojang.brigadier.context.CommandContext<CommandSourceStack> context) {
+        String id = StringArgumentType.getString(context, "id");
+        Optional<IconAsset> icon = Main.getAssetApi().icon(id);
+        if (icon.isEmpty()) {
+            context.getSource().getSender().sendRichMessage("<red>Unknown icon: " + id);
+            return 0;
+        }
+        context.getSource().getSender().sendMessage(Component.text(icon.get().character()).font(icon.get().font()));
+        return 1;
+    }
+
+    private int iconInfo(com.mojang.brigadier.context.CommandContext<CommandSourceStack> context) {
+        String id = StringArgumentType.getString(context, "id");
+        Optional<IconAsset> icon = Main.getAssetApi().icon(id);
+        if (icon.isEmpty()) {
+            context.getSource().getSender().sendRichMessage("<red>Unknown icon: " + id);
+            return 0;
+        }
+        IconAsset value = icon.get();
+        context.getSource().getSender().sendRichMessage("<aqua>" + value.id() + " <gray>unicode=<white>"
+                + value.unicode() + " <gray>font=<white>" + value.font().asString()
+                + " <gray>height=<white>" + value.height() + " <gray>ascent=<white>" + value.ascent());
+        return 1;
+    }
+
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> fontCommands() {
+        return Commands.literal("font").then(Commands.literal("test")
+                .then(Commands.argument("id", StringArgumentType.word()).suggests((c,b) -> suggest(b, Main.getAssetApi().fonts().stream().map(FontAsset::id).toList()))
+                        .executes(c -> testFont(c, "AssetChannel font test: AaBb 123"))
+                        .then(Commands.argument("text", StringArgumentType.greedyString()).executes(c -> testFont(c, StringArgumentType.getString(c, "text"))))))
+                .then(Commands.literal("list").executes(c -> {
+                    Collection<FontAsset> fonts = Main.getAssetApi().fonts();
+                    if (fonts.isEmpty()) c.getSource().getSender().sendRichMessage("<yellow>No fonts are loaded.");
+                    for (FontAsset font : fonts)
+                        c.getSource().getSender().sendRichMessage("<aqua>" + font.id() + " <gray>(<white>" + font.key().asString() + "<gray>)");
+                    return fonts.size();
+                }));
+    }
+
+    private int testFont(com.mojang.brigadier.context.CommandContext<CommandSourceStack> context, String text) {
+        if (!(context.getSource().getSender() instanceof Player player)) return playerOnly(context);
+        String id = StringArgumentType.getString(context, "id");
+        Optional<FontAsset> font = Main.getAssetApi().font(id);
+        if (font.isEmpty()) { player.sendRichMessage("<red>Unknown font: " + id); return 0; }
+        player.sendMessage(Component.text(text).font(font.get().key()));
+        return 1;
+    }
+
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> soundCommands() {
+        var playCategory = Commands.argument("category", StringArgumentType.word())
+                .suggests((c, b) -> suggest(b, SOUND_CATEGORIES))
+                .executes(c -> playSound(c, 1, 1))
+                .then(Commands.argument("volume", FloatArgumentType.floatArg(0)).executes(c -> playSound(c, FloatArgumentType.getFloat(c,"volume"), 1))
+                        .then(Commands.argument("pitch", FloatArgumentType.floatArg(0.01f, 2)).executes(c -> playSound(c, FloatArgumentType.getFloat(c,"volume"), FloatArgumentType.getFloat(c,"pitch")))));
+        var play = Commands.literal("play").then(Commands.argument("id", StringArgumentType.word())
+                .suggests((c,b) -> suggest(b, Main.getAssetApi().sounds().stream().map(SoundAsset::id).toList()))
+                .then(playCategory));
+        var stop = Commands.literal("stop").then(Commands.argument("id", StringArgumentType.word())
+                .suggests((c,b) -> { b.suggest("all"); return suggest(b, Main.getAssetApi().sounds().stream().map(SoundAsset::id).toList()); })
+                .executes(this::stopSound)
+                .then(Commands.argument("category", StringArgumentType.word())
+                        .suggests((c, b) -> suggest(b, SOUND_CATEGORIES))
+                        .executes(this::stopSoundInCategory)));
+        return Commands.literal("sound").then(play).then(stop)
+                .then(spatialSoundCommand("playat", false, false))
+                .then(spatialSoundCommand("broadcastat", false, true))
+                .then(spatialSoundCommand("playfrom", true, false))
+                .then(spatialSoundCommand("broadcastfrom", true, true));
+    }
+
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> spatialSoundCommand(
+            String name, boolean entityOrigin, boolean broadcast) {
+        var id = Commands.argument("id", StringArgumentType.word())
+                .suggests((c,b) -> suggest(b, Main.getAssetApi().sounds().stream().map(SoundAsset::id).toList()));
+        var category = Commands.argument("category", StringArgumentType.word())
+                .suggests((c, b) -> suggest(b, SOUND_CATEGORIES));
+        com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, ?> origin;
+        if (entityOrigin) origin = Commands.argument("origin", ArgumentTypes.entity());
+        else origin = Commands.argument("origin", ArgumentTypes.finePosition());
+        origin.executes(c -> playSpatialSound(c, entityOrigin, broadcast, 1, 1))
+                .then(Commands.argument("volume", FloatArgumentType.floatArg(0))
+                        .executes(c -> playSpatialSound(c, entityOrigin, broadcast, FloatArgumentType.getFloat(c, "volume"), 1))
+                        .then(Commands.argument("pitch", FloatArgumentType.floatArg(0.01f, 2))
+                                .executes(c -> playSpatialSound(c, entityOrigin, broadcast,
+                                        FloatArgumentType.getFloat(c, "volume"), FloatArgumentType.getFloat(c, "pitch")))));
+        if (broadcast) category.then(origin);
+        else category.then(Commands.argument("players", ArgumentTypes.players()).then(origin));
+        id.then(category);
+        return Commands.literal(name).then(id);
+    }
+
+    private int playSpatialSound(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c,
+                                 boolean entityOrigin, boolean broadcast, float volume, float pitch) {
+        try {
+            SoundOrigin origin = resolveOrigin(c, entityOrigin);
+            String id = StringArgumentType.getString(c, "id");
+            SoundCategory category = soundCategory(c);
+            if (broadcast) {
+                BroadcastPlaybackResult result = Main.getAssetApi().broadcastSound(id, origin, category, volume, pitch);
+                c.getSource().getSender().sendRichMessage(result.result() == PlaybackResult.PLAYED
+                        ? "<green>Played for " + result.played().size() + " nearby players"
+                            + (result.packNotReady().isEmpty() ? "." : " <yellow>(" + result.packNotReady().size() + " pack not ready)")
+                        : "<red>Unable to play sound: " + result.result());
+                return result.played().size();
+            }
+            List<Player> players = c.getArgument("players", PlayerSelectorArgumentResolver.class).resolve(c.getSource());
+            int played = 0;
+            for (Player player : players)
+                if (Main.getAssetApi().playSound(player, id, origin, category, volume, pitch) == PlaybackResult.PLAYED) played++;
+            c.getSource().getSender().sendRichMessage("<green>Played for " + played + " players.");
+            return played;
+        } catch (Exception e) {
+            c.getSource().getSender().sendRichMessage("<red>" + e.getMessage());
+            return 0;
+        }
+    }
+
+    private SoundOrigin resolveOrigin(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c,
+                                      boolean entityOrigin) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        if (entityOrigin) {
+            List<Entity> entities = c.getArgument("origin", EntitySelectorArgumentResolver.class).resolve(c.getSource());
+            if (entities.isEmpty()) throw new IllegalArgumentException("No source entity found");
+            return SoundOrigin.entity(entities.getFirst());
+        }
+        FinePosition position = c.getArgument("origin", FinePositionResolver.class).resolve(c.getSource());
+        return SoundOrigin.fixed(position.toLocation(c.getSource().getLocation().getWorld()));
+    }
+
+    private int playSound(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c, float volume, float pitch) {
+        if (!(c.getSource().getSender() instanceof Player player)) return playerOnly(c);
+        try {
+            PlaybackResult result = Main.getAssetApi().playSound(player, StringArgumentType.getString(c,"id"),
+                    soundCategory(c), volume, pitch);
+            player.sendRichMessage(result == PlaybackResult.PLAYED ? "<green>Sound started." : "<red>Unable to play sound: " + result);
+            return result == PlaybackResult.PLAYED ? 1 : 0;
+        } catch (IllegalArgumentException e) {
+            player.sendRichMessage("<red>" + e.getMessage());
+            return 0;
+        }
+    }
+
+    private int stopSound(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c) {
+        if (!(c.getSource().getSender() instanceof Player player)) return playerOnly(c);
+        String id = StringArgumentType.getString(c,"id");
+        if (id.equalsIgnoreCase("all")) { Main.getAssetApi().stopAllSounds(player); return 1; }
+        return Main.getAssetApi().stopSound(player, id) ? 1 : 0;
+    }
+
+    private int stopSoundInCategory(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c) {
+        if (!(c.getSource().getSender() instanceof Player player)) return playerOnly(c);
+        String id = StringArgumentType.getString(c,"id");
+        if (id.equalsIgnoreCase("all")) { Main.getAssetApi().stopAllSounds(player); return 1; }
+        try {
+            return Main.getAssetApi().stopSound(player, id, soundCategory(c)) ? 1 : 0;
+        } catch (IllegalArgumentException e) {
+            player.sendRichMessage("<red>" + e.getMessage());
+            return 0;
+        }
+    }
+
+    private static SoundCategory soundCategory(com.mojang.brigadier.context.CommandContext<CommandSourceStack> context) {
+        return parseSoundCategory(StringArgumentType.getString(context, "category"));
+    }
+
+    static SoundCategory parseSoundCategory(String value) {
+        try {
+            return SoundCategory.valueOf(value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Unknown sound category '" + value + "'. Valid categories: "
+                    + String.join(", ", SOUND_CATEGORIES));
+        }
+    }
+
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> musicCommands() {
+        var start = Commands.literal("start").then(Commands.argument("id", StringArgumentType.word())
+                .suggests((c,b) -> suggest(b, Main.getAssetApi().soundtracks().stream().map(SoundtrackAsset::id).toList()))
+                .then(Commands.argument("players", ArgumentTypes.players())
+                        .executes(c -> startMusic(c, SessionSettings.defaults()))
+                        .then(Commands.argument("loop", BoolArgumentType.bool()).executes(c -> startMusic(c, settings(c, false, false, 1)))
+                                .then(Commands.argument("synchronized", BoolArgumentType.bool()).executes(c -> startMusic(c, settings(c, true, false, 1)))
+                                        .then(Commands.argument("retain", BoolArgumentType.bool()).executes(c -> startMusic(c, settings(c, true, true, 1)))
+                                                .then(Commands.argument("volume", FloatArgumentType.floatArg(0)).executes(c -> startMusic(c, settings(c, true, true, FloatArgumentType.getFloat(c,"volume"))))))))));
+        var add = Commands.literal("add").then(Commands.argument("session", ArgumentTypes.uuid()).suggests(this::suggestSessions)
+                .then(Commands.argument("players", ArgumentTypes.players()).executes(c -> changeMembers(c, true))));
+        var remove = Commands.literal("remove").then(Commands.argument("session", ArgumentTypes.uuid()).suggests(this::suggestSessions)
+                .then(Commands.argument("players", ArgumentTypes.players()).executes(c -> changeMembers(c, false))));
+        var stop = Commands.literal("stop").then(Commands.argument("session", ArgumentTypes.uuid()).suggests(this::suggestSessions).executes(c -> {
+            Optional<MusicSession> session = Main.getAssetApi().session(c.getArgument("session", UUID.class));
+            session.ifPresent(MusicSession::stop); return session.isPresent() ? 1 : 0;
+        }));
+        var stages = Commands.literal("stages").then(Commands.argument("soundtrack", StringArgumentType.word())
+                .suggests((c,b) -> suggest(b, Main.getAssetApi().soundtracks().stream().map(SoundtrackAsset::id).toList()))
+                .executes(this::listStages));
+        var stage = Commands.literal("stage").then(Commands.argument("session", ArgumentTypes.uuid()).suggests(this::suggestSessions)
+                .then(Commands.argument("stage", StringArgumentType.word()).suggests(this::suggestStages)
+                        .then(Commands.argument("transition", StringArgumentType.word())
+                                .suggests((c,b) -> suggest(b, List.of("immediate", "session-boundary", "player-boundary")))
+                                .executes(this::changeStage))));
+        var origin = Commands.literal("origin").then(Commands.argument("session", ArgumentTypes.uuid()).suggests(this::suggestSessions)
+                .then(Commands.literal("listener").executes(c -> setSessionOrigin(c, SoundOrigin.listenerRelative())))
+                .then(Commands.literal("location").then(Commands.argument("origin", ArgumentTypes.finePosition())
+                        .executes(c -> setSessionOrigin(c, resolveOrigin(c, false)))))
+                .then(Commands.literal("entity").then(Commands.argument("origin", ArgumentTypes.entity())
+                        .executes(c -> setSessionOrigin(c, resolveOrigin(c, true)))))
+                .then(Commands.literal("speakers").then(Commands.argument("origins", ArgumentTypes.entities())
+                        .executes(c -> setSessionOrigin(c, resolveSpeakers(c))))));
+        return Commands.literal("music").then(start).then(add).then(remove).then(stop).then(stages).then(stage).then(origin)
+                .then(Commands.literal("list").executes(c -> {
+                    if (Main.getAssetApi().sessions().isEmpty()) c.getSource().getSender().sendRichMessage("<yellow>No active sessions.");
+                    for (MusicSession s : Main.getAssetApi().sessions())
+                        c.getSource().getSender().sendRichMessage("<aqua>"+s.id()+" <white>"+s.soundtrack().id()
+                                +" <gray>stage=<white>"+s.stage()+(s.transitioning() ? " <yellow>(transition pending)" : "")
+                                +" <gray>("+s.members().size()+" players)");
+                    return Main.getAssetApi().sessions().size();
+                }));
+    }
+
+    private SoundOrigin resolveSpeakers(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        List<Entity> entities = c.getArgument("origins", EntitySelectorArgumentResolver.class).resolve(c.getSource());
+        return SoundOrigin.speakers(entities.stream().map(SoundOrigin::entity).toList());
+    }
+
+    private int setSessionOrigin(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c, SoundOrigin origin) {
+        Optional<MusicSession> session = Main.getAssetApi().session(c.getArgument("session", UUID.class));
+        if (session.isEmpty()) { c.getSource().getSender().sendRichMessage("<red>Unknown session."); return 0; }
+        boolean changed = session.get().setOrigin(origin);
+        String detail = origin instanceof SoundOrigin.Speakers speakers
+                ? " <gray>(" + speakers.origins().size() + " simultaneous full-volume speakers)" : "";
+        c.getSource().getSender().sendRichMessage(changed
+                ? "<green>Music origin updated." + detail : "<red>Session is inactive.");
+        return changed ? 1 : 0;
+    }
+
+    private int listStages(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c) {
+        String id = StringArgumentType.getString(c, "soundtrack");
+        Optional<SoundtrackAsset> soundtrack = Main.getAssetApi().soundtrack(id);
+        if (soundtrack.isEmpty()) { c.getSource().getSender().sendRichMessage("<red>Unknown soundtrack: " + id); return 0; }
+        SoundtrackAsset asset = soundtrack.get();
+        c.getSource().getSender().sendRichMessage("<aqua>" + asset.id() + " <gray>stages (default: <white>" + asset.defaultStage() + "<gray>): <white>"
+                + String.join("<gray>, <white>", asset.stages().keySet()));
+        return asset.stages().size();
+    }
+
+    private int changeStage(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c) {
+        Optional<MusicSession> session = Main.getAssetApi().session(c.getArgument("session", UUID.class));
+        if (session.isEmpty()) { c.getSource().getSender().sendRichMessage("<red>Unknown session."); return 0; }
+        StageTransitionSettings settings = switch (StringArgumentType.getString(c, "transition").toLowerCase(Locale.ROOT)) {
+            case "immediate" -> StageTransitionSettings.immediate();
+            case "session-boundary" -> StageTransitionSettings.nextSessionBoundary();
+            case "player-boundary" -> StageTransitionSettings.nextPlayerBoundary();
+            default -> null;
+        };
+        if (settings == null) { c.getSource().getSender().sendRichMessage("<red>Unknown transition mode."); return 0; }
+        StageChangeResult result = session.get().setStage(StringArgumentType.getString(c, "stage"), settings);
+        c.getSource().getSender().sendRichMessage(result == StageChangeResult.APPLIED || result == StageChangeResult.SCHEDULED
+                ? "<green>Stage change: " + result : "<yellow>Stage change: " + result);
+        return result == StageChangeResult.APPLIED || result == StageChangeResult.SCHEDULED ? 1 : 0;
+    }
+
+    private SessionSettings settings(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c, boolean hasSync, boolean hasRetain, float volume) {
+        return new SessionSettings(BoolArgumentType.getBool(c,"loop"), hasSync && BoolArgumentType.getBool(c,"synchronized"),
+                hasRetain && BoolArgumentType.getBool(c,"retain"), volume);
+    }
+
+    private int startMusic(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c, SessionSettings settings) {
+        try {
+            List<Player> players = c.getArgument("players", PlayerSelectorArgumentResolver.class).resolve(c.getSource());
+            MusicSession session = Main.getAssetApi().startSoundtrack(StringArgumentType.getString(c,"id"), players, settings);
+            c.getSource().getSender().sendRichMessage("<green>Started session <aqua>" + session.id());
+            return 1;
+        } catch (Exception e) { c.getSource().getSender().sendRichMessage("<red>"+e.getMessage()); return 0; }
+    }
+
+    private int changeMembers(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c, boolean add) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        Optional<MusicSession> session = Main.getAssetApi().session(c.getArgument("session", UUID.class));
+        if (session.isEmpty()) return 0;
+        int changed = 0;
+        for (Player p : c.getArgument("players", PlayerSelectorArgumentResolver.class).resolve(c.getSource()))
+            if (add ? session.get().addPlayer(p) : session.get().removePlayer(p)) changed++;
+        return changed;
+    }
+
+    private java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestSessions(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c, com.mojang.brigadier.suggestion.SuggestionsBuilder b) {
+        return suggest(b, Main.getAssetApi().sessions().stream().map(s -> s.id().toString()).toList());
+    }
+    private java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestStages(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c, com.mojang.brigadier.suggestion.SuggestionsBuilder b) {
+        try {
+            return Main.getAssetApi().session(c.getArgument("session", UUID.class))
+                    .map(session -> suggest(b, session.soundtrack().stages().keySet()))
+                    .orElseGet(b::buildFuture);
+        } catch (IllegalArgumentException ignored) {
+            return b.buildFuture();
+        }
+    }
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggest(com.mojang.brigadier.suggestion.SuggestionsBuilder b, Collection<String> values) {
+        String remaining = b.getRemainingLowerCase();
+        values.stream().filter(v -> v.startsWith(remaining)).forEach(b::suggest);
+        return b.buildFuture();
+    }
+    private int playerOnly(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c) { c.getSource().getSender().sendRichMessage("<red>Only players can use this command."); return 0; }
+}
