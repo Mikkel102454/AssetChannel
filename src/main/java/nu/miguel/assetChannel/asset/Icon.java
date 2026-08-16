@@ -22,10 +22,11 @@ public class Icon implements Asset {
     Path path;
     Path config;
 
-    private int codePoint;
+    private Integer codePoint;
 
     private int height;
     private int ascent;
+    private int width;
 
     public Icon(String id, Path path, Path config) {
         this.id = id;
@@ -42,10 +43,6 @@ public class Icon implements Asset {
 
         try {
             YamlConfiguration yaml = YamlConfiguration.loadConfiguration(config.toFile());
-            if (!yaml.contains("unicode")) {
-                throw new IllegalArgumentException("Missing 'unicode' in config for icon '" + id + "'");
-            }
-
             if (!yaml.contains("height")) {
                 throw new IllegalArgumentException("Missing 'height' in config for icon '" + id + "'");
             }
@@ -54,7 +51,7 @@ public class Icon implements Asset {
                 throw new IllegalArgumentException("Missing 'ascent' in config for icon '" + id + "'");
             }
 
-            this.codePoint = parseUnicode(yaml.getString("unicode", ""));
+            this.codePoint = yaml.contains("unicode") ? parseUnicode(yaml.getString("unicode", "")) : null;
             this.height = yaml.getInt("height");
             this.ascent = yaml.getInt("ascent");
 
@@ -113,6 +110,7 @@ public class Icon implements Asset {
 
             int width = image.getWidth();
             int imageHeight = image.getHeight();
+            this.width = Math.max(1, (int) Math.round((double) width * height / imageHeight));
 
             if (width > 256) {
                 throw new IllegalArgumentException("Image width must not be greater than 256px for icon '" + id + "'. Found: " + width + "px");
@@ -209,7 +207,18 @@ public class Icon implements Asset {
     }
 
     public int getCodePoint() {
+        if (codePoint == null) throw new IllegalStateException("Icon '" + id + "' has not been assigned Unicode yet");
         return codePoint;
+    }
+
+    public boolean hasConfiguredCodePoint() { return codePoint != null; }
+
+    public void assignGeneratedCodePoint(int value) {
+        if (codePoint != null) throw new IllegalStateException("Icon '" + id + "' already has Unicode");
+        if (!Character.isValidCodePoint(value)
+                || value >= Character.MIN_SURROGATE && value <= Character.MAX_SURROGATE)
+            throw new IllegalArgumentException("Invalid generated Unicode for icon '" + id + "'");
+        codePoint = value;
     }
 
     public int getHeight() {
@@ -219,4 +228,6 @@ public class Icon implements Asset {
     public int getAscent() {
         return ascent;
     }
+
+    public int getWidth() { return width; }
 }

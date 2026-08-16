@@ -5,7 +5,10 @@ import net.kyori.adventure.key.Key;
 import java.util.Objects;
 
 /** Metadata required to render an icon from the generated resource pack. */
-public record IconAsset(String id, Key font, int codePoint, int height, int ascent) {
+public record IconAsset(String id, Key font, int codePoint, int height, int ascent, int width) {
+    public IconAsset(String id, Key font, int codePoint, int height, int ascent) {
+        this(id, font, codePoint, height, ascent, height);
+    }
     public IconAsset {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(font, "font");
@@ -14,6 +17,7 @@ public record IconAsset(String id, Key font, int codePoint, int height, int asce
             throw new IllegalArgumentException("Invalid Unicode code point: " + codePoint);
         }
         if (height <= 0) throw new IllegalArgumentException("height must be greater than zero");
+        if (width <= 0) throw new IllegalArgumentException("width must be greater than zero");
         if (ascent > height) throw new IllegalArgumentException("ascent cannot be greater than height");
     }
 

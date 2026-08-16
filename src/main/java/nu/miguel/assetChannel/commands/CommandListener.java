@@ -19,6 +19,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Entity;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import java.util.*;
 
 public class CommandListener {
@@ -45,6 +46,7 @@ public class CommandListener {
                 .then(fontCommands())
                 .then(soundCommands())
                 .then(musicCommands())
+                .then(hudCommands())
                 .build();
 
     }
@@ -369,4 +371,81 @@ public class CommandListener {
         return b.buildFuture();
     }
     private int playerOnly(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c) { c.getSource().getSender().sendRichMessage("<red>Only players can use this command."); return 0; }
+
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> hudCommands() {
+        var template = Commands.argument("template", StringArgumentType.word())
+                .suggests((c,b) -> suggest(b, Main.getAssetApi().huds().stream().map(HudAsset::id).toList()))
+                .executes(c -> showHud(c, null, null, null, Map.of()))
+                .then(Commands.literal("with").then(Commands.argument("variables", StringArgumentType.greedyString())
+                        .executes(c -> showHudParsed(c, null, null, null))))
+                .then(Commands.argument("slot", StringArgumentType.word())
+                        .executes(c -> showHud(c, StringArgumentType.getString(c,"slot"), null, null, Map.of()))
+                        .then(Commands.argument("priority", IntegerArgumentType.integer())
+                                .executes(c -> showHud(c, StringArgumentType.getString(c,"slot"), IntegerArgumentType.getInteger(c,"priority"), null, Map.of()))
+                                .then(Commands.argument("resume", BoolArgumentType.bool())
+                                        .executes(c -> showHud(c, StringArgumentType.getString(c,"slot"), IntegerArgumentType.getInteger(c,"priority"), BoolArgumentType.getBool(c,"resume"), Map.of()))
+                                        .then(Commands.argument("variables", StringArgumentType.greedyString())
+                                                .executes(c -> showHudParsed(c, StringArgumentType.getString(c,"slot"), IntegerArgumentType.getInteger(c,"priority"), BoolArgumentType.getBool(c,"resume")))))));
+        var show=Commands.literal("show").then(Commands.argument("players",ArgumentTypes.players()).then(template));
+        var update=Commands.literal("update").then(Commands.argument("players",ArgumentTypes.players())
+                .then(Commands.argument("slot",StringArgumentType.word())
+                        .then(Commands.argument("variables",StringArgumentType.greedyString()).executes(this::updateHud))));
+        var hide=Commands.literal("hide").then(Commands.argument("players",ArgumentTypes.players())
+                .then(Commands.argument("slot",StringArgumentType.word()).executes(this::hideHud)));
+        var active=Commands.literal("active").then(Commands.argument("players",ArgumentTypes.players()).executes(this::activeHuds));
+        var list=Commands.literal("list").executes(this::listHuds);
+        return Commands.literal("hud").then(show).then(update).then(hide).then(active).then(list);
+    }
+
+    private int showHud(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c,String slot,Integer priority,Boolean resume,Map<String,Component> variables) {
+        try {
+            List<Player> players=c.getArgument("players",PlayerSelectorArgumentResolver.class).resolve(c.getSource());
+            HudRequest request=new HudRequest(variables,Optional.ofNullable(slot),Optional.ofNullable(priority),Optional.ofNullable(resume));
+            String template=StringArgumentType.getString(c,"template");int accepted=0;
+            Map<HudDisplayResult,Integer> results=new EnumMap<>(HudDisplayResult.class);
+            for(Player player:players){HudDisplayResult result=Main.getAssetApi().showHud(player,template,request);results.merge(result,1,Integer::sum);if(result==HudDisplayResult.DISPLAYED||result==HudDisplayResult.QUEUED||result==HudDisplayResult.TEXT_FALLBACK)accepted++;}
+            c.getSource().getSender().sendRichMessage((accepted>0?"<green>":"<red>")+"HUD result: <white>"+results);
+            return accepted;
+        } catch(Exception error){c.getSource().getSender().sendRichMessage("<red>Could not show HUD: "+error.getMessage());return 0;}
+    }
+
+    private int showHudParsed(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c,String slot,Integer priority,Boolean resume){
+        try{return showHud(c,slot,priority,resume,parseHudVariables(StringArgumentType.getString(c,"variables")));}
+        catch(IllegalArgumentException error){c.getSource().getSender().sendRichMessage("<red>Could not parse HUD variables: "+error.getMessage());return 0;}
+    }
+
+    private int updateHud(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c) {
+        try {
+            List<Player> players=c.getArgument("players",PlayerSelectorArgumentResolver.class).resolve(c.getSource());String slot=StringArgumentType.getString(c,"slot");
+            Map<String,Component> variables=parseHudVariables(StringArgumentType.getString(c,"variables"));int updated=0;
+            for(Player player:players){Optional<HudSession> session=Main.getAssetApi().hudSession(player,slot);if(session.isPresent()&&session.get().updateVariables(variables))updated++;}
+            c.getSource().getSender().sendRichMessage(updated>0?"<green>Updated "+updated+" HUD session(s).":"<red>No matching HUD session accepted the variables.");return updated;
+        }catch(Exception error){c.getSource().getSender().sendRichMessage("<red>Could not update HUD: "+error.getMessage());return 0;}
+    }
+
+    private int hideHud(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c) {
+        try {int hidden=0;String slot=StringArgumentType.getString(c,"slot");for(Player player:c.getArgument("players",PlayerSelectorArgumentResolver.class).resolve(c.getSource()))if(Main.getAssetApi().hideHud(player,slot))hidden++;
+            c.getSource().getSender().sendRichMessage(hidden>0?"<green>Hid HUD for "+hidden+" player(s).":"<yellow>No matching HUD sessions.");return hidden;
+        }catch(Exception error){c.getSource().getSender().sendRichMessage("<red>Could not hide HUD: "+error.getMessage());return 0;}
+    }
+
+    private int activeHuds(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c) {
+        try {Set<UUID> players=c.getArgument("players",PlayerSelectorArgumentResolver.class).resolve(c.getSource()).stream().map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet());
+            List<HudSession> found=Main.getAssetApi().hudSessions().stream().filter(s->players.contains(s.playerId())).toList();
+            if(found.isEmpty())c.getSource().getSender().sendRichMessage("<yellow>No HUD sessions for those players.");
+            for(HudSession s:found)c.getSource().getSender().sendRichMessage("<aqua>"+s.id()+" <white>"+s.templateId()+" <gray>player=<white>"+s.playerId()+" <gray>slot=<white>"+s.slot()+" <gray>surface=<white>"+s.surface()+" <gray>state=<white>"+s.state()+" <gray>remaining=<white>"+(s.remainingDuration().isZero()?"persistent":s.remainingDuration().toMillis()+"ms"));
+            return found.size();
+        }catch(Exception error){c.getSource().getSender().sendRichMessage("<red>Could not list HUD sessions: "+error.getMessage());return 0;}
+    }
+
+    private int listHuds(com.mojang.brigadier.context.CommandContext<CommandSourceStack> c) {
+        Collection<HudAsset> huds=Main.getAssetApi().huds();if(huds.isEmpty())c.getSource().getSender().sendRichMessage("<yellow>No HUD templates are loaded.");
+        for(HudAsset hud:huds)c.getSource().getSender().sendRichMessage("<aqua>"+hud.id()+" <gray>surface=<white>"+hud.surface()+" <gray>slot=<white>"+hud.slot()+" <gray>priority=<white>"+hud.priority()+" <gray>variables=<white>"+String.join(",",hud.variables().keySet()));return huds.size();
+    }
+
+    static Map<String,Component> parseHudVariables(String input) {
+        if(input==null||input.isBlank())return Map.of();Map<String,Component> result=new LinkedHashMap<>();MiniMessage mini=MiniMessage.miniMessage();
+        for(String assignment:input.split(";",-1)){int equals=assignment.indexOf('=');if(equals<=0)throw new IllegalArgumentException("Variables must use name=value separated by semicolons");String name=assignment.substring(0,equals).trim();String value=assignment.substring(equals+1).trim();if(!name.matches("[a-zA-Z][a-zA-Z0-9_.-]*"))throw new IllegalArgumentException("Invalid variable name '"+name+"'");if(result.putIfAbsent(name,mini.deserialize(value))!=null)throw new IllegalArgumentException("Duplicate variable '"+name+"'");}
+        return Map.copyOf(result);
+    }
 }

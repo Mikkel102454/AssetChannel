@@ -1,6 +1,6 @@
 # AssetChannel
 
-AssetChannel turns fonts, icons, sounds, and adaptive music into a Minecraft resource pack and exposes them through a Paper API.
+AssetChannel turns fonts, icons, sounds, adaptive music, and reusable HUD templates into a Minecraft resource pack and exposes them through a Paper API.
 
 ## What it provides
 
@@ -45,10 +45,12 @@ plugins/AssetChannel/
 |   `-- ui/rank.yml
 |-- sound/
 |   `-- npc/talk.mp3
-`-- music/
-    `-- lobby/
-        |-- config.yml
-        `-- main.mp3
+|-- music/
+|   `-- lobby/
+|       |-- config.yml
+|       `-- main.mp3
+`-- hud/
+    `-- notification/banner.yml
 ```
 
 Examples:
@@ -57,6 +59,34 @@ Examples:
 - `icons/ui/rank.png` becomes icon ID `ui.rank`.
 - `sound/npc/talk.mp3` becomes sound ID `npc.talk`.
 - `music/lobby/` becomes soundtrack ID `lobby`.
+- `hud/notification/banner.yml` becomes HUD template ID `notification.banner`.
+
+### HUD templates
+
+HUDs are domain-neutral templates. Callers supply Adventure components for declared `<var:name>` inputs; supplied components are inserted directly and are never reparsed as MiniMessage.
+
+```yaml
+surface: boss-bar
+slot: notifications
+duration: 4s
+priority: 100
+resume-interrupted: true
+variables:
+  heading: {required: true}
+  body: {default: ""}
+  icon: {default: "<icon:ui.info>"}
+layout:
+  background: ui.banner
+  content: "<var:icon> <yellow><bold><var:heading></bold> <var:body>"
+  horizontal-padding: 16
+  overflow: ellipsis
+boss-bar: {color: yellow, overlay: progress, progress: 1.0}
+fallback:
+  mode: text-only
+  content: "<var:heading>: <var:body>"
+```
+
+Supported surfaces are `boss-bar`, `title`, and `action-bar`. A zero duration is persistent. Each player has one active request per surface; higher priorities interrupt, while equal/lower priorities queue. Slots support replacement, updates, and removal.
 
 ### Icons
 
@@ -68,7 +98,21 @@ height: 16
 ascent: 15
 ```
 
-Unicode values and asset IDs must be unique.
+`unicode` is optional. When omitted, AssetChannel deterministically assigns an available character from the Unicode private-use range `U+E000`–`U+F8FF`. Existing explicit values remain supported and are reserved before automatic assignment.
+
+```yaml
+height: 16
+ascent: 15
+```
+
+Asset IDs and explicit Unicode values must be unique. Plugins can retrieve either an explicit or generated value by ID:
+
+```java
+IconAsset icon = assets.icon("ui.banner").orElseThrow();
+int codePoint = icon.codePoint();
+String unicode = icon.unicode(); // for example U+E5A2
+String direct = assets.iconUnicode("ui.banner").orElseThrow();
+```
 
 ### Standalone sounds
 
@@ -285,7 +329,23 @@ IconAsset rank = assets.icon("ui.rank").orElseThrow();
 player.sendMessage(Component.text(rank.character()).font(rank.font()));
 ```
 
-Sound assets expose their Adventure key and detected source-audio `Duration`. Font assets expose Adventure keys. Icon assets expose their font, code point, rendered character, height, and ascent.
+Sound assets expose their Adventure key and detected source-audio `Duration`. Font assets expose Adventure keys. Icon assets expose their font, code point, rendered character, height, ascent, and scaled rendered width.
+
+### Show and update a HUD
+
+```java
+HudDisplayResult result = assets.showHud(player, "notification.banner",
+        new HudRequest(Map.of(
+                "heading", Component.text("Server Restart"),
+                "body", Component.text("Restarting in 5 minutes")
+        )));
+
+assets.hudSession(player, "notifications")
+        .ifPresent(session -> session.updateVariables(Map.of("body", Component.text("Restarting now"))));
+assets.hideHud(player, "notifications");
+```
+
+Missing required variables and unknown supplied variables return `INVALID_VARIABLES`. When the pack is unavailable, a template either displays its text-only fallback or returns `PACK_NOT_READY`.
 
 ## Operator commands
 
@@ -312,6 +372,21 @@ Commands require `assetchannel.command.test`, granted to operators by default.
 /asset music stage <session-uuid> <stage> <immediate|session-boundary|player-boundary>
 /asset music origin <session-uuid> <listener|location|entity|speakers> [origin]
 /asset music list
+/asset hud list
+/asset hud show <players> <template>
+/asset hud show <players> <template> with <name=value;name=value...>
+/asset hud show <players> <template> <slot> <priority> <resume> [name=value;name=value...]
+/asset hud update <players> <slot> <name=value;name=value...>
+/asset hud hide <players> <slot>
+/asset hud active <players>
+```
+
+HUD command values use MiniMessage and are separated with semicolons. For example:
+
+```text
+/asset hud show @s demo.quest-notification with heading=<gold>Test;body=Hello world
+/asset hud update @s quest-notification heading=<yellow>Updated;body=Still visible
+/asset hud hide @s quest-notification
 ```
 
 ## Reliability behavior

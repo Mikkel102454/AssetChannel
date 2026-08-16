@@ -12,6 +12,7 @@ public class PathResolver {
     static File fontPath;
     static File soundPath;
     static File musicPath;
+    static File hudPath;
 
     public static void ensurePaths(){
         dataPath = ensureDataPath();
@@ -19,6 +20,7 @@ public class PathResolver {
         fontPath = ensureFontPath(dataPath);
         soundPath = ensureSoundPath(dataPath);
         musicPath = ensureMusicPath(dataPath);
+        hudPath = ensureFolder(dataPath, "hud");
 
         hasBeenEnsured = true;
     }
@@ -109,5 +111,16 @@ public class PathResolver {
             return null;
         }
         return musicPath;
+    }
+
+    private static File ensureFolder(File parent, String name) {
+        File path = new File(parent, name);
+        if (!path.exists() && !path.mkdirs()) Logger.log(Level.SEVERE, "Failed to create " + name + " data folder");
+        return path;
+    }
+
+    public static File getHudPath() {
+        if (!hasBeenEnsured) { Logger.log(Level.WARNING, "Tried to get HUD folder path without ensuring it exists"); return null; }
+        return hudPath;
     }
 }

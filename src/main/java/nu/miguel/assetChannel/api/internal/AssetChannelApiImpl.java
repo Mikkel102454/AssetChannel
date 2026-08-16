@@ -23,6 +23,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     private final Map<UUID, LinkedHashSet<MusicSessionImpl>> playerSessions = new HashMap<>();
     private final Set<UUID> packReady = new HashSet<>();
     private BukkitTask musicTicker;
+    private final HudManager hudManager = new HudManager(this);
 
     public void loadAssets(List<Asset> assets) {
         requireMainThread();
@@ -34,7 +35,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
         Map<String, String> newSpatialSoundKeys = new HashMap<>();
         for (Asset asset : assets) {
             if (asset instanceof Icon icon) newIcons.put(icon.getId(), new IconAsset(icon.getId(),
-                    Key.key(Icon.FONT_KEY), icon.getCodePoint(), icon.getHeight(), icon.getAscent()));
+                    Key.key(Icon.FONT_KEY), icon.getCodePoint(), icon.getHeight(), icon.getAscent(), icon.getWidth()));
             else if (asset instanceof Font font) newFonts.put(font.getId(), new FontAsset(font.getId(), Key.key(font.getKey())));
             else if (asset instanceof Sound sound) {
                 newSounds.put(sound.getId(), new SoundAsset(sound.getId(), Key.key(sound.getKey()), sound.getDuration()));
@@ -56,6 +57,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
         soundtracks = Collections.unmodifiableMap(newTracks);
         musicModels = Map.copyOf(models);
         spatialSoundKeys = Map.copyOf(newSpatialSoundKeys);
+        hudManager.load(assets.stream().filter(Hud.class::isInstance).map(Hud.class::cast).toList(), icons);
     }
 
     public void setPackReady(Player player, boolean ready) {
@@ -70,11 +72,13 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
         Set<MusicSessionImpl> playerMusic = playerSessions.get(player.getUniqueId());
         if (playerMusic != null)
             for (MusicSessionImpl session : List.copyOf(playerMusic)) session.disconnect(player);
+        hudManager.onQuit(player.getUniqueId());
     }
 
     public void stopSessions() {
         requireMainThread();
         for (MusicSessionImpl session : List.copyOf(sessions.values())) session.stop();
+        hudManager.clear();
     }
 
     void ensureMusicTicker() {
@@ -113,10 +117,12 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     @Override public Collection<FontAsset> fonts() { return fonts.values(); }
     @Override public Collection<SoundAsset> sounds() { return sounds.values(); }
     @Override public Collection<SoundtrackAsset> soundtracks() { return soundtracks.values(); }
+    @Override public Collection<HudAsset> huds() { return hudManager.huds(); }
     @Override public Optional<IconAsset> icon(String id) { return Optional.ofNullable(icons.get(normalize(id))); }
     @Override public Optional<FontAsset> font(String id) { return Optional.ofNullable(fonts.get(normalize(id))); }
     @Override public Optional<SoundAsset> sound(String id) { return Optional.ofNullable(sounds.get(normalize(id))); }
     @Override public Optional<SoundtrackAsset> soundtrack(String id) { return Optional.ofNullable(soundtracks.get(normalize(id))); }
+    @Override public Optional<HudAsset> hud(String id) { return hudManager.hud(id); }
 
     @Override public PlaybackResult playSound(Player player, String id, SoundCategory category, float volume, float pitch) {
         return playSound(player, id, SoundOrigin.listenerRelative(), category, volume, pitch);
@@ -294,6 +300,11 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     }
     @Override public Optional<MusicSession> session(UUID id) { return Optional.ofNullable(sessions.get(id)); }
     @Override public Collection<MusicSession> sessions() { return List.copyOf(sessions.values()); }
+    @Override public HudDisplayResult showHud(Player player, String templateId, HudRequest request) { return hudManager.show(player, templateId, request); }
+    @Override public Optional<HudSession> hudSession(UUID id) { return hudManager.session(id); }
+    @Override public Optional<HudSession> hudSession(Player player, String slot) { requireMainThread(); return hudManager.session(player, slot); }
+    @Override public Collection<HudSession> hudSessions() { return hudManager.sessions(); }
+    @Override public boolean hideHud(Player player, String slot) { return hudManager.hide(player, slot); }
 
     private static String normalize(String id) { return id.toLowerCase(Locale.ROOT); }
     static void requireMainThread() {

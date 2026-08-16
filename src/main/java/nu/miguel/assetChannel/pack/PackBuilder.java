@@ -22,6 +22,7 @@ public class PackBuilder {
             if (!buildFonts(texturePack, assets)) return false;
             if (!buildSounds(texturePack, assets)) return false;
             if (!buildMusic(texturePack, assets)) return false;
+            if (!SpacingFont.build(texturePack)) return false;
             texturePack.publish();
             published = true;
             return true;

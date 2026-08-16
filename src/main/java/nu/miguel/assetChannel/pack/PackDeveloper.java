@@ -14,6 +14,8 @@ import java.util.HashSet;
 import java.util.stream.Stream;
 
 public class PackDeveloper {
+    static final int GENERATED_ICON_FIRST = 0xE000;
+    static final int GENERATED_ICON_LAST = 0xF8FF;
 
     public static List<Asset> createPack() {
         List<Asset> assets = new ArrayList<>();
@@ -23,6 +25,7 @@ public class PackDeveloper {
             scanSounds(assets);
             scanFonts(assets);
             scanMusic(assets);
+            scanHuds(assets);
 
         } catch (IOException e) {
             throw new RuntimeException("Failed to scan asset folders", e);
@@ -70,6 +73,7 @@ public class PackDeveloper {
     }
 
     static void validateAssets(List<Asset> assets) {
+        assignIconCodePoints(assets);
         Set<String> typedIds = new HashSet<>();
         Set<Integer> iconCodePoints = new HashSet<>();
         for (Asset asset : assets) {
@@ -82,6 +86,66 @@ public class PackDeveloper {
                         + String.format("%04X", icon.getCodePoint()));
             }
         }
+        Set<String> icons = assets.stream().filter(Icon.class::isInstance).map(Asset::getId).collect(java.util.stream.Collectors.toSet());
+        Set<String> fonts = assets.stream().filter(Font.class::isInstance).map(Asset::getId).collect(java.util.stream.Collectors.toSet());
+        for (Asset asset : assets) if (asset instanceof Hud hud) {
+            if (hud.background() != null && !icons.contains(hud.background()))
+                throw new IllegalArgumentException("HUD " + hud.getId() + " references unknown background icon '" + hud.background() + "'");
+            for (String text : List.of(hud.content(), hud.subtitle(), hud.fallbackContent())) validateHudTags(hud, text, icons, fonts);
+            for (Hud.Variable variable : hud.variables().values()) if (variable.defaultValue() != null)
+                validateHudTags(hud, variable.defaultValue(), icons, fonts);
+        }
+    }
+
+    /** Assigns repeatable private-use characters to icons whose sidecar omits unicode. */
+    static void assignIconCodePoints(List<Asset> assets) {
+        List<Icon> icons = assets.stream().filter(Icon.class::isInstance).map(Icon.class::cast).toList();
+        Set<Integer> used = new HashSet<>();
+        for (Icon icon : icons) if (icon.hasConfiguredCodePoint() && !used.add(icon.getCodePoint()))
+            throw new IllegalArgumentException("Duplicate icon Unicode: U+" + String.format("%04X", icon.getCodePoint()));
+
+        int capacity = GENERATED_ICON_LAST - GENERATED_ICON_FIRST + 1;
+        for (Icon icon : icons.stream().filter(value -> !value.hasConfiguredCodePoint())
+                .sorted(java.util.Comparator.comparing(Icon::getId)).toList()) {
+            int offset = Math.floorMod(icon.getId().hashCode(), capacity);
+            int selected = -1;
+            for (int probe = 0; probe < capacity; probe++) {
+                int candidate = GENERATED_ICON_FIRST + (offset + probe) % capacity;
+                if (used.add(candidate)) { selected = candidate; break; }
+            }
+            if (selected < 0) throw new IllegalArgumentException("No generated icon Unicode values remain in U+E000-U+F8FF");
+            icon.assignGeneratedCodePoint(selected);
+        }
+    }
+
+    private static void validateHudTags(Hud hud, String text, Set<String> icons, Set<String> fonts) {
+        var iconsMatcher = java.util.regex.Pattern.compile("<icon:([a-z0-9._-]+)>").matcher(text);
+        while (iconsMatcher.find()) if (!icons.contains(iconsMatcher.group(1)))
+            throw new IllegalArgumentException("HUD " + hud.getId() + " references unknown icon '" + iconsMatcher.group(1) + "'");
+        var fontsMatcher = java.util.regex.Pattern.compile("<font:assetchannel:([a-z0-9._/-]+)>").matcher(text);
+        while (fontsMatcher.find()) {
+            String id = fontsMatcher.group(1).replace('/', '.');
+            if (!id.equals("icons") && !id.equals("spacing") && !fonts.contains(id))
+                throw new IllegalArgumentException("HUD " + hud.getId() + " references unknown font '" + id + "'");
+        }
+        try {
+            var empty = net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.resolver("var", (args, context) -> {
+                args.popOr("HUD variable name is required");
+                return net.kyori.adventure.text.minimessage.tag.Tag.inserting(net.kyori.adventure.text.Component.empty());
+            });
+            var emptyIcon = net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.resolver("icon", (args, context) -> {
+                args.popOr("Icon id is required");
+                return net.kyori.adventure.text.minimessage.tag.Tag.inserting(net.kyori.adventure.text.Component.empty());
+            });
+            net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(text, empty, emptyIcon);
+        } catch (RuntimeException error) {
+            throw new IllegalArgumentException("HUD " + hud.getId() + " contains invalid MiniMessage: " + error.getMessage(), error);
+        }
+    }
+
+    private static void scanHuds(List<Asset> assets) throws IOException {
+        Path root = PathResolver.getHudPath().toPath();
+        for (AssetFile file : scanFiles(root, Set.of("yml", "yaml"))) assets.add(Hud.load(file.id(), file.path()));
     }
 
     private static void scanMusic(List<Asset> assets) throws IOException {
