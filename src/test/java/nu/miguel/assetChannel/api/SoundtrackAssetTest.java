@@ -28,6 +28,13 @@ class SoundtrackAssetTest {
         assertTrue(asset.muteVanillaMusic());
     }
 
+    @Test void exposesOtherMusicMuteSetting() {
+        MusicStageAsset stage = new MusicStageAsset("default", Duration.ofSeconds(2), 1, false);
+        SoundtrackAsset asset = new SoundtrackAsset("boss", Duration.ofSeconds(2), 1, false,
+                "default", Map.of("default", stage), false, true);
+        assertTrue(asset.muteOtherMusic());
+    }
+
     @Test void legacyConstructorCreatesTheImplicitDefaultStage() {
         SoundtrackAsset asset = new SoundtrackAsset("lobby", Duration.ofSeconds(3), 2, false);
         assertEquals("default", asset.defaultStage());

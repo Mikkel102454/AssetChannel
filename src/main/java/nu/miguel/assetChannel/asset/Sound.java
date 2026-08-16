@@ -6,16 +6,20 @@ import nu.miguel.assetChannel.util.Ffmpeg;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.io.IOException;
+import java.time.Duration;
 import com.google.gson.*;
 import java.util.List;
+import nu.miguel.assetChannel.util.AudioDurationReader;
 
 public class Sound implements Asset{
     String id;
     Path path;
+    private final Duration duration;
 
-    public Sound(String id, Path path) {
+    public Sound(String id, Path path) throws IOException {
         this.id = id;
         this.path = path;
+        this.duration = AudioDurationReader.read(path);
     }
 
     public static boolean build(TexturePack texturePack, List<Sound> sounds) {
@@ -25,13 +29,13 @@ public class Sound implements Asset{
                 if (!sound.build(texturePack)) return false;
                 JsonObject event = new JsonObject();
                 JsonArray entries = new JsonArray();
-                entries.add("assetchannel:sounds/listener/" + sound.id.replace('.', '/'));
+                entries.add(resourceName(sound.id, false));
                 event.add("sounds", entries);
                 events.add(sound.id, event);
 
                 JsonObject spatialEvent = new JsonObject();
                 JsonArray spatialEntries = new JsonArray();
-                spatialEntries.add("assetchannel:sounds/spatial/" + sound.id.replace('.', '/'));
+                spatialEntries.add(resourceName(sound.id, true));
                 spatialEvent.add("sounds", spatialEntries);
                 events.add(sound.id + ".spatial", spatialEvent);
             }
@@ -70,4 +74,9 @@ public class Sound implements Asset{
 
     public String getKey() { return "assetchannel:" + id; }
     public String getSpatialKey() { return "assetchannel:" + id + ".spatial"; }
+    public Duration getDuration() { return duration; }
+
+    static String resourceName(String id, boolean spatial) {
+        return "assetchannel:" + (spatial ? "spatial/" : "listener/") + id.replace('.', '/');
+    }
 }

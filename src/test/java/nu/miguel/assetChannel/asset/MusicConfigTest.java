@@ -33,6 +33,21 @@ class MusicConfigTest {
         assertTrue(Music.load("theme", directory).isMuteVanillaMusic());
     }
 
+    @Test void infersASingleMp3FileCaseInsensitively() throws Exception {
+        Files.writeString(directory.resolve("config.yml"), "auto-split:\n  enabled: false\n");
+        Files.write(directory.resolve("song.MP3"), new byte[]{1});
+        assertEquals("theme", Music.load("theme", directory).getId());
+    }
+
+    @Test void loadsOtherMusicMuteSetting() throws Exception {
+        Files.writeString(directory.resolve("config.yml"), "mute-other-music: true\nauto-split:\n  enabled: false\n");
+        Files.write(directory.resolve("song.ogg"), new byte[]{1});
+
+        Music music = Music.load("theme", directory);
+        assertTrue(music.isMuteOtherMusic());
+        assertFalse(music.isMuteVanillaMusic());
+    }
+
     @Test void multipleFilesRequireOrder() throws Exception {
         Files.writeString(directory.resolve("config.yml"), "auto-split:\n  enabled: false\n");
         Files.write(directory.resolve("one.ogg"), new byte[]{1});
@@ -45,6 +60,30 @@ class MusicConfigTest {
         Files.write(directory.resolve("two.ogg"), new byte[]{1});
         Files.writeString(directory.resolve("config.yml"), "order: [two.ogg, one.ogg]\nauto-split:\n  enabled: false\n");
         assertDoesNotThrow(() -> Music.load("theme", directory));
+    }
+
+    @Test void acceptsMixedFormatsInACompleteOrder() throws Exception {
+        Files.write(directory.resolve("intro.MP3"), new byte[]{1});
+        Files.write(directory.resolve("loop.ogg"), new byte[]{1});
+        Files.writeString(directory.resolve("config.yml"),
+                "order: [intro.MP3, loop.ogg]\nauto-split:\n  enabled: false\n");
+        assertDoesNotThrow(() -> Music.load("theme", directory));
+    }
+
+    @Test void rejectsDuplicateNestedUnsupportedAndIncompleteOrderEntries() throws Exception {
+        Files.write(directory.resolve("one.mp3"), new byte[]{1});
+        Files.write(directory.resolve("two.ogg"), new byte[]{1});
+        Files.createDirectories(directory.resolve("nested"));
+        Files.write(directory.resolve("nested/hidden.mp3"), new byte[]{1});
+
+        for (String order : List.of(
+                "[one.mp3, one.mp3, two.ogg]",
+                "[nested/hidden.mp3, one.mp3, two.ogg]",
+                "[notes.wav, one.mp3, two.ogg]",
+                "[one.mp3]")) {
+            Files.writeString(directory.resolve("config.yml"), "order: " + order + "\n");
+            assertThrows(IllegalArgumentException.class, () -> Music.load("theme", directory), order);
+        }
     }
 
     @Test void splitIntervalMustBePositive() throws Exception {
@@ -71,6 +110,12 @@ class MusicConfigTest {
         assertTrue(music.getStage("phase-2").autoSplit());
     }
 
+    @Test void loadsMp3InANamedStage() throws Exception {
+        Files.writeString(directory.resolve("config.yml"), "default-stage: phase-1\n");
+        createStage("phase-1", "calm.mp3", "auto-split:\n  enabled: false\n");
+        assertEquals("phase-1", Music.load("boss", directory).getDefaultStage());
+    }
+
     @Test void stagedLayoutRequiresAtLeastOneStage() throws Exception {
         Files.writeString(directory.resolve("config.yml"), "default-stage: phase-1\n");
         Files.createDirectories(directory.resolve("stages"));
@@ -86,6 +131,13 @@ class MusicConfigTest {
     @Test void rejectsMixedLegacyAndStagedLayouts() throws Exception {
         Files.writeString(directory.resolve("config.yml"), "default-stage: phase-1\n");
         Files.write(directory.resolve("root.ogg"), new byte[]{1});
+        createStage("phase-1", "calm.ogg", "auto-split:\n  enabled: false\n");
+        assertThrows(IllegalArgumentException.class, () -> Music.load("boss", directory));
+    }
+
+    @Test void rejectsRootMp3WithStagedLayouts() throws Exception {
+        Files.writeString(directory.resolve("config.yml"), "default-stage: phase-1\n");
+        Files.write(directory.resolve("root.mp3"), new byte[]{1});
         createStage("phase-1", "calm.ogg", "auto-split:\n  enabled: false\n");
         assertThrows(IllegalArgumentException.class, () -> Music.load("boss", directory));
     }

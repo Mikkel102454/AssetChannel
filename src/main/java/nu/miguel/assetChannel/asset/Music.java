@@ -3,7 +3,7 @@ package nu.miguel.assetChannel.asset;
 import com.google.gson.*;
 import nu.miguel.assetChannel.Main;
 import nu.miguel.assetChannel.texturepack.TexturePack;
-import nu.miguel.assetChannel.util.OggDurationReader;
+import nu.miguel.assetChannel.util.AudioDurationReader;
 import nu.miguel.assetChannel.util.Ffmpeg;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -19,12 +19,15 @@ public final class Music implements Asset {
     private final String defaultStage;
     private final Map<String, Stage> stages;
     private final boolean muteVanillaMusic;
+    private final boolean muteOtherMusic;
 
-    private Music(String id, String defaultStage, Map<String, Stage> stages, boolean muteVanillaMusic) {
+    private Music(String id, String defaultStage, Map<String, Stage> stages, boolean muteVanillaMusic,
+                  boolean muteOtherMusic) {
         this.id = id;
         this.defaultStage = defaultStage;
         this.stages = Collections.unmodifiableMap(new LinkedHashMap<>(stages));
         this.muteVanillaMusic = muteVanillaMusic;
+        this.muteOtherMusic = muteOtherMusic;
     }
 
     public static Music load(String id, Path folder) throws IOException {
@@ -34,14 +37,15 @@ public final class Music implements Asset {
             throw new IllegalArgumentException("Missing config.yml for soundtrack '" + id + "'");
         YamlConfiguration rootConfig = YamlConfiguration.loadConfiguration(configPath.toFile());
         boolean muteVanillaMusic = rootConfig.getBoolean("mute-vanilla-music", false);
+        boolean muteOtherMusic = rootConfig.getBoolean("mute-other-music", false);
 
         Path stagesFolder = normalizedFolder.resolve("stages");
-        List<Path> rootOggs = listOggs(normalizedFolder);
+        List<Path> rootAudio = listAudio(normalizedFolder);
         if (!Files.isDirectory(stagesFolder)) {
             Stage stage = loadStage(id, LEGACY_STAGE, normalizedFolder);
-            return new Music(id, LEGACY_STAGE, Map.of(LEGACY_STAGE, stage), muteVanillaMusic);
+            return new Music(id, LEGACY_STAGE, Map.of(LEGACY_STAGE, stage), muteVanillaMusic, muteOtherMusic);
         }
-        if (!rootOggs.isEmpty())
+        if (!rootAudio.isEmpty())
             throw new IllegalArgumentException("Soundtrack '" + id + "' cannot mix root-level audio with stages/");
 
         String configuredDefault = rootConfig.getString("default-stage");
@@ -64,7 +68,7 @@ public final class Music implements Asset {
         if (loaded.isEmpty()) throw new IllegalArgumentException("Staged soundtrack '" + id + "' requires at least one stage");
         if (!configuredDefault.equals(configuredDefault.toLowerCase(Locale.ROOT)) || !loaded.containsKey(configuredDefault))
             throw new IllegalArgumentException("Unknown default-stage '" + configuredDefault + "' in soundtrack '" + id + "'");
-        return new Music(id, configuredDefault, loaded, muteVanillaMusic);
+        return new Music(id, configuredDefault, loaded, muteVanillaMusic, muteOtherMusic);
     }
 
     private static Stage loadStage(String soundtrackId, String stageId, Path folder) throws IOException {
@@ -72,29 +76,29 @@ public final class Music implements Asset {
         if (!Files.isRegularFile(configPath))
             throw new IllegalArgumentException("Missing config.yml for stage '" + stageId + "' in soundtrack '" + soundtrackId + "'");
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(configPath.toFile());
-        List<Path> oggs = listOggs(folder);
-        if (oggs.isEmpty())
-            throw new IllegalArgumentException("No OGG files in stage '" + stageId + "' of soundtrack '" + soundtrackId + "'");
+        List<Path> audioFiles = listAudio(folder);
+        if (audioFiles.isEmpty())
+            throw new IllegalArgumentException("No supported audio files in stage '" + stageId + "' of soundtrack '" + soundtrackId + "'");
 
         List<String> order = yaml.getStringList("order");
         List<Path> sources = new ArrayList<>();
         if (order.isEmpty()) {
-            if (oggs.size() != 1)
+            if (audioFiles.size() != 1)
                 throw new IllegalArgumentException("Stage '" + stageId + "' of soundtrack '" + soundtrackId + "' requires an order list");
-            sources.add(oggs.getFirst());
+            sources.add(audioFiles.getFirst());
         } else {
             Set<Path> seen = new HashSet<>();
             Path normalizedFolder = folder.normalize();
             for (String name : order) {
                 Path candidate = normalizedFolder.resolve(name).normalize();
                 if (!Objects.equals(candidate.getParent(), normalizedFolder) || !Files.isRegularFile(candidate)
-                        || !name.toLowerCase(Locale.ROOT).endsWith(".ogg"))
+                        || !AudioDurationReader.isSupported(candidate))
                     throw new IllegalArgumentException("Invalid ordered file '" + name + "' in stage '" + stageId + "'");
                 if (!seen.add(candidate)) throw new IllegalArgumentException("Duplicate ordered file '" + name + "' in stage '" + stageId + "'");
                 sources.add(candidate);
             }
-            if (seen.size() != oggs.size() || !seen.containsAll(oggs))
-                throw new IllegalArgumentException("The order for stage '" + stageId + "' of soundtrack '" + soundtrackId + "' must contain every OGG exactly once");
+            if (seen.size() != audioFiles.size() || !seen.containsAll(audioFiles))
+                throw new IllegalArgumentException("The order for stage '" + stageId + "' of soundtrack '" + soundtrackId + "' must contain every supported audio file exactly once");
         }
 
         boolean split = yaml.getBoolean("auto-split.enabled", false);
@@ -109,10 +113,10 @@ public final class Music implements Asset {
         return new Stage(stageId, folder, sources, split, interval, handoffLead);
     }
 
-    private static List<Path> listOggs(Path folder) throws IOException {
+    private static List<Path> listAudio(Path folder) throws IOException {
         try (var files = Files.list(folder)) {
             return files.filter(Files::isRegularFile)
-                    .filter(p -> p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".ogg"))
+                    .filter(AudioDurationReader::isSupported)
                     .sorted().toList();
         }
     }
@@ -207,10 +211,10 @@ public final class Music implements Asset {
     private static List<Duration> timelineDurations(Stage stage, int segmentCount) throws IOException {
         if (!stage.autoSplit) {
             List<Duration> durations = new ArrayList<>();
-            for (Path source : stage.sources) durations.add(OggDurationReader.read(source));
+            for (Path source : stage.sources) durations.add(AudioDurationReader.read(source));
             return List.copyOf(durations);
         }
-        Duration sourceDuration = OggDurationReader.read(stage.sources.getFirst());
+        Duration sourceDuration = AudioDurationReader.read(stage.sources.getFirst());
         return splitTimelineDurations(sourceDuration, stage.splitIntervalSeconds, segmentCount);
     }
 
@@ -234,6 +238,7 @@ public final class Music implements Asset {
     @Override public String getId() { return id; }
     public String getDefaultStage() { return defaultStage; }
     public boolean isMuteVanillaMusic() { return muteVanillaMusic; }
+    public boolean isMuteOtherMusic() { return muteOtherMusic; }
     public Map<String, Stage> getStages() { return stages; }
     public Stage getStage(String stage) { return stages.get(stage); }
     public List<Segment> getSegments() { return stages.get(defaultStage).segments; }

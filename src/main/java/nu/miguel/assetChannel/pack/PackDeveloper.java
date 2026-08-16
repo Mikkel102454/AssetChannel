@@ -48,11 +48,15 @@ public class PackDeveloper {
     private static void scanSounds(List<Asset> assets) throws IOException {
         Path root = PathResolver.getSoundPath().toPath();
 
-        for (AssetFile file : scanFiles(root, Set.of("ogg"))) {
+        for (AssetFile file : scanSoundFiles(root)) {
 
             Sound sound = new Sound(file.id(), file.path());
             assets.add(sound);
         }
+    }
+
+    static List<AssetFile> scanSoundFiles(Path root) throws IOException {
+        return scanFiles(root, Set.of("ogg", "mp3"));
     }
 
     private static void scanFonts(List<Asset> assets) throws IOException {
@@ -65,7 +69,7 @@ public class PackDeveloper {
         }
     }
 
-    private static void validateAssets(List<Asset> assets) {
+    static void validateAssets(List<Asset> assets) {
         Set<String> typedIds = new HashSet<>();
         Set<Integer> iconCodePoints = new HashSet<>();
         for (Asset asset : assets) {

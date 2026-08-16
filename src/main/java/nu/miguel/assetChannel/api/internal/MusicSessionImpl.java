@@ -132,6 +132,19 @@ final class MusicSessionImpl implements MusicSession {
                 remove(member.id, true);
                 continue;
             }
+            boolean mutedByOtherMusic = api.isMutedByOtherMusic(member.id, this);
+            if (mutedByOtherMusic) {
+                if (!member.mutedByOtherMusic) {
+                    stopFor(player, member);
+                    member.lastToken = Long.MIN_VALUE;
+                    member.mutedByOtherMusic = true;
+                }
+                continue;
+            }
+            if (member.mutedByOtherMusic) {
+                member.mutedByOtherMusic = false;
+                member.lastToken = Long.MIN_VALUE;
+            }
             Position position = playbackPosition(member, elapsed, now, logicalPosition);
             if (model.isMuteVanillaMusic()
                     && (member.lastVanillaMuteAt == Long.MIN_VALUE
@@ -337,6 +350,7 @@ final class MusicSessionImpl implements MusicSession {
         return true;
     }
     @Override public boolean active() { return active; }
+    boolean mutesOtherMusic() { return descriptor.muteOtherMusic(); }
 
     private static final class Member {
         final UUID id;
@@ -347,6 +361,7 @@ final class MusicSessionImpl implements MusicSession {
         long lastToken = Long.MIN_VALUE;
         boolean waitingForPack;
         boolean retainedReconnect;
+        boolean mutedByOtherMusic;
         long lastVanillaMuteAt = Long.MIN_VALUE;
         final LinkedHashSet<String> playingKeys = new LinkedHashSet<>();
         Member(UUID id, String stage) { this.id = id; this.stage = stage; }

@@ -20,7 +20,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     private Map<String, Music> musicModels = Map.of();
     private Map<String, String> spatialSoundKeys = Map.of();
     private final Map<UUID, MusicSessionImpl> sessions = new LinkedHashMap<>();
-    private final Map<UUID, MusicSessionImpl> playerSessions = new HashMap<>();
+    private final Map<UUID, LinkedHashSet<MusicSessionImpl>> playerSessions = new HashMap<>();
     private final Set<UUID> packReady = new HashSet<>();
     private BukkitTask musicTicker;
 
@@ -37,7 +37,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
                     Key.key(Icon.FONT_KEY), icon.getCodePoint(), icon.getHeight(), icon.getAscent()));
             else if (asset instanceof Font font) newFonts.put(font.getId(), new FontAsset(font.getId(), Key.key(font.getKey())));
             else if (asset instanceof Sound sound) {
-                newSounds.put(sound.getId(), new SoundAsset(sound.getId(), Key.key(sound.getKey())));
+                newSounds.put(sound.getId(), new SoundAsset(sound.getId(), Key.key(sound.getKey()), sound.getDuration()));
                 newSpatialSoundKeys.put(sound.getId(), sound.getSpatialKey());
             }
             else if (asset instanceof Music music) {
@@ -46,7 +46,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
                         new MusicStageAsset(stageId, stage.duration(), stage.segments().size(), stage.autoSplit())));
                 newTracks.put(music.getId(), new SoundtrackAsset(music.getId(), music.getDuration(),
                         music.getSegments().size(), music.isAutoSplit(), music.getDefaultStage(), stages,
-                        music.isMuteVanillaMusic()));
+                        music.isMuteVanillaMusic(), music.isMuteOtherMusic()));
                 models.put(music.getId(), music);
             }
         }
@@ -67,8 +67,9 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     public void onQuit(Player player) {
         requireMainThread();
         packReady.remove(player.getUniqueId());
-        MusicSessionImpl session = playerSessions.get(player.getUniqueId());
-        if (session != null) session.disconnect(player);
+        Set<MusicSessionImpl> playerMusic = playerSessions.get(player.getUniqueId());
+        if (playerMusic != null)
+            for (MusicSessionImpl session : List.copyOf(playerMusic)) session.disconnect(player);
     }
 
     public void stopSessions() {
@@ -84,10 +85,22 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     }
 
     void claim(Player player, MusicSessionImpl session) {
-        MusicSessionImpl previous = playerSessions.put(player.getUniqueId(), session);
-        if (previous != null && previous != session) previous.removePlayer(player);
+        playerSessions.computeIfAbsent(player.getUniqueId(), ignored -> new LinkedHashSet<>()).add(session);
     }
-    void release(UUID player, MusicSessionImpl session) { playerSessions.remove(player, session); }
+    void release(UUID player, MusicSessionImpl session) {
+        LinkedHashSet<MusicSessionImpl> playerMusic = playerSessions.get(player);
+        if (playerMusic == null) return;
+        playerMusic.remove(session);
+        if (playerMusic.isEmpty()) playerSessions.remove(player);
+    }
+    boolean isMutedByOtherMusic(UUID player, MusicSessionImpl session) {
+        Set<MusicSessionImpl> playerMusic = playerSessions.get(player);
+        if (playerMusic == null) return false;
+        MusicSessionImpl mutingSession = null;
+        for (MusicSessionImpl candidate : playerMusic)
+            if (candidate.active() && candidate.mutesOtherMusic() && isPackReady(player)) mutingSession = candidate;
+        return mutingSession != null && mutingSession != session;
+    }
     void closed(MusicSessionImpl session) {
         sessions.remove(session.id(), session);
         if (sessions.isEmpty() && musicTicker != null) {

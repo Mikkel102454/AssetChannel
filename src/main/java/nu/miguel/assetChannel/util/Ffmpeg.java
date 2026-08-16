@@ -23,11 +23,15 @@ public final class Ffmpeg {
 
     /** Preserves the source channel layout for listener-relative playback. */
     public static void transcodeListening(Path source, Path destination) throws IOException, InterruptedException {
-        // A valid unsplit Vorbis source already has exactly the format Minecraft needs.
-        // Keeping its original packets avoids a lossy second encode.
-        DurationCheck.requirePositiveVorbis(source);
-        Files.createDirectories(destination.getParent());
-        Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+        if (AudioDurationReader.isOgg(source)) {
+            // Keeping valid Vorbis packets avoids a lossy second encode.
+            AudioDurationReader.read(source);
+            Files.createDirectories(destination.getParent());
+            Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+        } else {
+            AudioDurationReader.read(source);
+            transcode(source, destination, 0);
+        }
     }
 
     /** Produces mono audio so Minecraft can spatialize it. */
@@ -63,6 +67,7 @@ public final class Ffmpeg {
                     arguments.addAll(List.of("-f", "ogg"));
                     arguments.add(temporary.toAbsolutePath().toString());
                     run(arguments);
+                    if (!validOgg(temporary)) throw new IOException("FFmpeg produced invalid audio");
                     moveAtomic(temporary, cached);
                 } finally {
                     Files.deleteIfExists(temporary);
@@ -153,17 +158,11 @@ public final class Ffmpeg {
 
     private static boolean validOgg(Path path) {
         try {
-            return Files.isRegularFile(path) && Files.size(path) > 0 && !OggDurationReader.read(path).isZero();
+            if (!Files.isRegularFile(path) || Files.size(path) <= 0) return false;
+            var duration = OggDurationReader.read(path);
+            return !duration.isZero() && !duration.isNegative();
         } catch (IOException e) {
             return false;
-        }
-    }
-
-    private static final class DurationCheck {
-        private static void requirePositiveVorbis(Path path) throws IOException {
-            var duration = OggDurationReader.read(path);
-            if (duration.isZero() || duration.isNegative())
-                throw new IOException("Audio has no positive duration: " + path);
         }
     }
 

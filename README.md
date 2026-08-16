@@ -44,18 +44,18 @@ plugins/AssetChannel/
 |   |-- ui/rank.png
 |   `-- ui/rank.yml
 |-- sound/
-|   `-- npc/talk.ogg
+|   `-- npc/talk.mp3
 `-- music/
     `-- lobby/
         |-- config.yml
-        `-- main.ogg
+        `-- main.mp3
 ```
 
 Examples:
 
 - `font/ui/title.ttf` becomes `assetchannel:ui.title`.
 - `icons/ui/rank.png` becomes icon ID `ui.rank`.
-- `sound/npc/talk.ogg` becomes sound ID `npc.talk`.
+- `sound/npc/talk.mp3` becomes sound ID `npc.talk`.
 - `music/lobby/` becomes soundtrack ID `lobby`.
 
 ### Icons
@@ -72,7 +72,7 @@ Unicode values and asset IDs must be unique.
 
 ### Standalone sounds
 
-Put OGG Vorbis files anywhere under `sound/`. AssetChannel generates:
+Put MP3 or OGG Vorbis files anywhere under `sound/`. AssetChannel generates:
 
 - A channel-preserving variant for listener-relative playback
 - A mono variant for fixed locations, entities, and spatial broadcasts
@@ -89,9 +89,10 @@ Use this when late-joining players, reconnects, speaker updates, or stage change
 
 ```yaml
 order:
-  - main.ogg
+  - main.mp3
 
 mute-vanilla-music: true
+mute-other-music: true
 
 auto-split:
   enabled: true
@@ -101,7 +102,7 @@ playback:
   handoff-lead-milliseconds: 75
 ```
 
-Five seconds is the recommended default. A synchronized late join waits at most approximately one clip. AssetChannel schedules clips using the requested five-second source timeline, so OGG encoder padding cannot accumulate timing drift.
+Five seconds is the recommended default. A synchronized late join waits at most approximately one clip. AssetChannel schedules clips using the requested five-second source timeline, so encoder padding cannot accumulate timing drift.
 
 Short clips are preloaded by Minecraft. Adjacent clips start slightly early to cover server-tick, network, and client-decoder latency. Minecraft still cannot guarantee sample-perfect playback between separate sound events.
 
@@ -111,7 +112,7 @@ Use this when uninterrupted music matters more than fast synchronized joins:
 
 ```yaml
 order:
-  - main.ogg
+  - main.mp3
 
 auto-split:
   enabled: false
@@ -126,15 +127,15 @@ Music is generated twice:
 - Listener-relative sessions preserve stereo or the source channel layout.
 - Fixed, entity, and speaker origins use mono so Minecraft can apply panning and attenuation.
 
-Unsplit listener-relative Vorbis is copied without a lossy second encode. Split clips and positional variants use 48 kHz Vorbis at configurable variable quality. Source files are never modified.
+Valid unsplit listener-relative OGG Vorbis is copied byte-for-byte without a lossy second encode. MP3 listener audio, split clips, and positional variants are cached and encoded as 48 kHz OGG Vorbis at configurable variable quality. Source files are never modified, and generated resource-pack paths always end in `.ogg`.
 
 ## Ordered tracks
 
-A soundtrack folder requires `config.yml`. When it contains one OGG, `order` may be omitted. Multiple files must all appear exactly once:
+A soundtrack folder requires `config.yml`. It may mix MP3 and OGG Vorbis sources. When it contains one supported audio file, `order` may be omitted. Multiple supported files must all appear exactly once, using their full filenames and extensions:
 
 ```yaml
 order:
-  - intro.ogg
+  - intro.mp3
   - loop.ogg
 
 auto-split:
@@ -145,7 +146,7 @@ Auto-splitting accepts exactly one source file. Use a single assembled source wh
 
 ## Named stages
 
-A staged soundtrack puts no OGG files at its root. Its root configuration selects a default stage:
+A staged soundtrack puts no MP3 or OGG files at its root. Its root configuration selects a default stage:
 
 ```text
 music/boss/
@@ -153,7 +154,7 @@ music/boss/
 `-- stages/
     |-- phase-1/
     |   |-- config.yml
-    |   `-- calm.ogg
+    |   `-- calm.mp3
     `-- enraged/
         |-- config.yml
         `-- intense.ogg
@@ -164,6 +165,7 @@ Root `music/boss/config.yml`:
 ```yaml
 default-stage: phase-1
 mute-vanilla-music: true
+mute-other-music: true
 ```
 
 Each stage has its own `order`, `auto-split`, and optional `playback.handoff-lead-milliseconds`. Stage IDs must be lowercase and match `[a-z0-9][a-z0-9._-]*`.
@@ -202,7 +204,7 @@ overrides:
 
 `handoff-lead-milliseconds` accepts `0` through `250`; zero disables early handoff. A stage-level value overrides the global value. Vorbis quality accepts `0` through `10`.
 
-Converted audio is cached under `plugins/AssetChannel/cache/audio/`. Cache keys include the complete source content and encoding settings, so changed inputs are rebuilt while unchanged inputs are reused.
+Converted audio is cached under `plugins/AssetChannel/cache/audio/`. Cache keys include the complete source content and encoding settings, so changed inputs are rebuilt while unchanged inputs are reused. Unsplit listener OGG files bypass the conversion cache because they are copied unchanged.
 
 ## Java API
 
@@ -240,6 +242,8 @@ session.stop();
 
 `session.stage()` returns the requested target stage. `memberStages()` shows each member's current stage during staggered changes, and `transitioning()` reports whether work remains.
 
+A player may belong to multiple music sessions at the same time. Set `mute-other-music: true` in a soundtrack's root `config.yml` when that soundtrack should silence the player's other AssetChannel music sessions while it is active. If multiple such sessions contain the same player, the most recently joined session takes priority; earlier sessions keep their timelines and resume when the muting session ends. `mute-vanilla-music` remains independent and controls Minecraft's background music.
+
 ### Positional music and speakers
 
 ```java
@@ -264,6 +268,8 @@ Every available speaker in the listener's world emits simultaneously. Minecraft 
 assets.playSound(player, "npc.talk", SoundCategory.VOICE, 1.0f, 1.0f);
 assets.playSound(player, "enemy.growl", SoundOrigin.fixed(enemyLocation), SoundCategory.HOSTILE, 1.0f, 1.0f);
 assets.playSound(player, "animal.call", SoundOrigin.entity(animal), SoundCategory.NEUTRAL, 1.0f, 1.0f);
+
+Duration effectLength = assets.sound("npc.talk").orElseThrow().duration();
 ```
 
 `PlaybackResult` distinguishes successful playback, unknown assets, unavailable origins, and players whose pack is not ready. `broadcastSound` returns both players who heard the sound and nearby players still loading the pack.
@@ -279,7 +285,7 @@ IconAsset rank = assets.icon("ui.rank").orElseThrow();
 player.sendMessage(Component.text(rank.character()).font(rank.font()));
 ```
 
-Font assets expose Adventure keys. Icon assets expose their font, code point, rendered character, height, and ascent.
+Sound assets expose their Adventure key and detected source-audio `Duration`. Font assets expose Adventure keys. Icon assets expose their font, code point, rendered character, height, and ascent.
 
 ## Operator commands
 
@@ -313,7 +319,7 @@ Commands require `assetchannel.command.test`, granted to operators by default.
 - Pack commands build in the background rather than blocking the server tick.
 - A second build cannot start while another is running.
 - Assets are generated in unique staging directories.
-- Every cached or newly generated OGG is checked for a valid positive duration.
+- Every source, cached file, and newly generated OGG must contain readable audio with a positive duration.
 - `pack.zip` is replaced atomically after the complete build succeeds.
 - A failed build leaves the previous pack and active playback untouched.
 - Resource-pack readiness events are accepted only for AssetChannel's pack UUID.
@@ -344,4 +350,4 @@ The first build creates listener and spatial variants. Later builds reuse the co
 
 ### A generated pack is rejected
 
-Check that every audio file is valid OGG Vorbis, every ordered filename exists exactly once, IDs are lowercase, and staged soundtracks do not mix root audio with a `stages/` directory.
+Check that every source is a valid MP3 or OGG Vorbis file, every supported audio file appears exactly once in `order`, IDs are lowercase, and staged soundtracks do not mix root audio with a `stages/` directory. Files with other extensions are not audio inputs, and invalid or audio-less MP3 files make pack generation fail.

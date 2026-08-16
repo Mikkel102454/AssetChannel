@@ -5,7 +5,7 @@ import java.util.*;
 
 public record SoundtrackAsset(String id, Duration duration, int segmentCount, boolean autoSplit,
                               String defaultStage, Map<String, MusicStageAsset> stages,
-                              boolean muteVanillaMusic) {
+                              boolean muteVanillaMusic, boolean muteOtherMusic) {
     public SoundtrackAsset {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(duration, "duration");
@@ -16,11 +16,16 @@ public record SoundtrackAsset(String id, Duration duration, int segmentCount, bo
 
     public SoundtrackAsset(String id, Duration duration, int segmentCount, boolean autoSplit) {
         this(id, duration, segmentCount, autoSplit, "default",
-                Map.of("default", new MusicStageAsset("default", duration, segmentCount, autoSplit)), false);
+                Map.of("default", new MusicStageAsset("default", duration, segmentCount, autoSplit)), false, false);
     }
 
     public SoundtrackAsset(String id, Duration duration, int segmentCount, boolean autoSplit,
                            String defaultStage, Map<String, MusicStageAsset> stages) {
-        this(id, duration, segmentCount, autoSplit, defaultStage, stages, false);
+        this(id, duration, segmentCount, autoSplit, defaultStage, stages, false, false);
+    }
+
+    public SoundtrackAsset(String id, Duration duration, int segmentCount, boolean autoSplit,
+                           String defaultStage, Map<String, MusicStageAsset> stages, boolean muteVanillaMusic) {
+        this(id, duration, segmentCount, autoSplit, defaultStage, stages, muteVanillaMusic, false);
     }
 }
