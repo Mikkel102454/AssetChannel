@@ -21,6 +21,13 @@ Paper plugin/API for resource-pack generation/hosting plus fonts, icons, audio, 
 - Public API changes need focused API tests and compatibility awareness.
 - Never edit `build/` or `.gradle/` as source.
 
+## Test-driven development
+
+- For behavior-changing code, write the smallest meaningful automated test before changing production code.
+- Run that exact test first and confirm it fails for the expected reason. Only then implement the change and rerun the test until it passes; do not weaken or rewrite the test merely to make the implementation pass.
+- Add tests only where they protect meaningful behavior, regressions, contracts, or edge cases. Documentation, formatting, mechanical refactors, and other changes with no behavior to verify do not need tests.
+- During development, run only the narrowest relevant test target. Before finishing, run the smallest affected test set needed to catch integration regressions; do not run unrelated full suites by default.
+
 ## Verify
 
 ```sh
@@ -30,4 +37,3 @@ Paper plugin/API for resource-pack generation/hosting plus fonts, icons, audio, 
 ```
 
 For one test: `./gradlew test --tests 'fully.qualified.TestName'`. The deployable unclassified JAR is under `build/libs/`; the `plain` JAR is not deployable.
-
