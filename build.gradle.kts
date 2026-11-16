@@ -2,6 +2,7 @@ plugins {
     id("java-library")
     id("xyz.jpenilla.run-paper") version "3.1.0"
     id("com.gradleup.shadow") version "9.6.1"
+    id("maven-publish")
 }
 
 repositories {
@@ -55,5 +56,34 @@ tasks {
 
     assemble {
         dependsOn(shadowJar)
+    }
+}
+
+group = "com.yourname"
+version = "1.0.0"
+
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            artifact(tasks.named("shadowJar")) {
+                classifier = null
+            }
+
+            groupId = project.group.toString()
+            artifactId = "AssetChannel"
+            version = project.version.toString()
+        }
+    }
+
+    repositories {
+        maven {
+            name = "reposilite"
+            url = uri("https://maven.yourdomain.com/releases")
+
+            credentials {
+                username = System.getenv("MAVEN_USERNAME")
+                password = System.getenv("MAVEN_PASSWORD")
+            }
+        }
     }
 }
