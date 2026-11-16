@@ -21,6 +21,8 @@ public class PathResolver {
         soundPath = ensureSoundPath(dataPath);
         musicPath = ensureMusicPath(dataPath);
         hudPath = ensureFolder(dataPath, "hud");
+        ensureFolder(dataPath, "blocks");
+        ensureFolder(ensureFolder(dataPath, "imports"), "assets");
 
         hasBeenEnsured = true;
     }

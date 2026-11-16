@@ -68,7 +68,7 @@ final class HudRenderer {
             IconAsset value = icons.get(args.popOr("Icon id is required").value().toLowerCase(Locale.ROOT));
             return value == null ? null : Tag.inserting(icon(value));
         });
-        return mini.deserialize(source == null ? "" : source, variables, icon);
+        return mini.deserialize(source == null ? "" : source, variables, icon, SpacingFont.resolver());
     }
 
     private static Component icon(IconAsset icon) {
@@ -82,13 +82,17 @@ final class HudRenderer {
         if (component instanceof TextComponent text) {
             Key font = style.font();
             for (int cp : text.content().codePoints().toArray()) {
-                if (ICON_FONT.equals(font) && iconWidths.containsKey(cp)) total += iconWidths.get(cp) + 1;
-                else total += defaultWidth(cp) + 1;
-                if (cp != ' ' && style.decoration(TextDecoration.BOLD) == TextDecoration.State.TRUE) total++;
+                total += advance(cp, style);
             }
         }
         for (Component child : component.children()) total += rawWidth(child, style);
         return total;
+    }
+
+    private int advance(int cp, Style style) {
+        if (SPACING_FONT.equals(style.font())) return cp - SpacingFont.BASE + SpacingFont.MIN;
+        int width = ICON_FONT.equals(style.font()) && iconWidths.containsKey(cp) ? iconWidths.get(cp) : defaultWidth(cp);
+        return width + 1 + (cp != ' ' && style.decoration(TextDecoration.BOLD) == TextDecoration.State.TRUE ? 1 : 0);
     }
 
     private static int defaultWidth(int cp) {
@@ -105,36 +109,32 @@ final class HudRenderer {
 
     private Component overflow(Component value, int maximum, Hud.Overflow mode) {
         if (width(value) <= maximum) return value;
-        Component suffix = mode == Hud.Overflow.ELLIPSIS ? Component.text("...") : Component.empty();
-        int allowed = Math.max(0, maximum - width(suffix));
-        Component clipped = truncate(value, allowed, new int[]{0});
+        Component suffix = mode == Hud.Overflow.ELLIPSIS && width(Component.text("...")) <= maximum ? Component.text("...") : Component.empty();
+        int allowed = Math.max(0, maximum + 1 - rawWidth(suffix, Style.empty()));
+        Component clipped = truncate(value, allowed, new int[]{0, 0}, Style.empty());
         return clipped.append(suffix);
     }
 
-    private Component truncate(Component component, int maximum, int[] used) {
+    private Component truncate(Component component, int maximum, int[] used, Style parent) {
+        Style style = component.style().merge(parent, Style.Merge.Strategy.IF_ABSENT_ON_TARGET);
         Component out = component.children(List.of());
         if (component instanceof TextComponent text) {
             StringBuilder kept = new StringBuilder();
             for (int cp : text.content().codePoints().toArray()) {
-                int w = defaultWidth(cp) + (kept.isEmpty() ? 0 : 1);
-                if (used[0] + w > maximum) break;
+                int w = advance(cp, style);
+                if (used[0] + w > maximum) { used[1] = 1; break; }
                 kept.appendCodePoint(cp); used[0] += w;
             }
             out = text.content(kept.toString()).children(List.of());
         }
         for (Component child : component.children()) {
-            if (used[0] >= maximum) break;
-            out = out.append(truncate(child, maximum, used));
+            if (used[1] != 0) break;
+            out = out.append(truncate(child, maximum, used, style));
         }
         return out;
     }
 
     private static Component spacing(int pixels) {
-        Component result = Component.empty(); int left = pixels;
-        while (left != 0) {
-            int step = Math.max(SpacingFont.MIN, Math.min(SpacingFont.MAX, left));
-            result = result.append(Component.text(SpacingFont.character(step)).font(SPACING_FONT)); left -= step;
-        }
-        return result;
+        return SpacingFont.component(pixels);
     }
 }

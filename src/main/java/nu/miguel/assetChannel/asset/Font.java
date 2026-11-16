@@ -35,15 +35,7 @@ public class Font implements Asset{
             Files.createDirectories(destination.getParent());
             Files.copy(path, destination, StandardCopyOption.REPLACE_EXISTING);
 
-            JsonObject provider = new JsonObject();
-            provider.addProperty("type", "ttf");
-            // Minecraft resolves TTF files relative to assets/<namespace>/font/.
-            provider.addProperty("file", providerFile());
-            JsonArray shift = new JsonArray();
-            shift.add(0); shift.add(0);
-            provider.add("shift", shift);
-            provider.addProperty("size", 11);
-            provider.addProperty("oversample", 1.0);
+            JsonObject provider = provider();
             JsonArray providers = new JsonArray();
             providers.add(provider);
             JsonObject root = new JsonObject();
@@ -52,6 +44,14 @@ public class Font implements Asset{
             Files.createDirectories(definition.getParent());
             Files.writeString(definition,
                     new GsonBuilder().setPrettyPrinting().create().toJson(root));
+            // Preserve existing dotted API keys while retaining canonical nested resource paths.
+            if (id.contains(".")) {
+                JsonObject reference = new JsonObject(); reference.addProperty("type", "reference");
+                reference.addProperty("id", "assetchannel:" + resourcePath);
+                JsonArray aliases = new JsonArray(); aliases.add(reference);
+                JsonObject alias = new JsonObject(); alias.add("providers", aliases);
+                Files.writeString(fontRoot.resolve(id + ".json"), new GsonBuilder().create().toJson(alias));
+            }
             return true;
         } catch (IOException e) {
             return false;
@@ -64,6 +64,24 @@ public class Font implements Asset{
     }
 
     public String getKey() { return "assetchannel:" + id; }
+
+    JsonObject provider() {
+        String name = path.getFileName().toString();
+        Path sidecar = path.resolveSibling(name.substring(0, name.lastIndexOf('.')) + ".yml");
+        var config = Files.exists(sidecar) ? org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(sidecar.toFile())
+                : new org.bukkit.configuration.file.YamlConfiguration();
+        double size = config.getDouble("size", 11), oversample = config.getDouble("oversample", 1);
+        java.util.List<?> offset = config.getList("shift", java.util.List.of(0, 0));
+        if (!Double.isFinite(size) || size <= 0 || !Double.isFinite(oversample) || oversample <= 0
+                || offset.size() != 2 || !(offset.get(0) instanceof Number x) || !(offset.get(1) instanceof Number y)
+                || !Double.isFinite(x.doubleValue()) || !Double.isFinite(y.doubleValue()))
+            throw new IllegalArgumentException("Invalid font settings: " + sidecar);
+        JsonObject provider = new JsonObject();
+        provider.addProperty("type", "ttf"); provider.addProperty("file", providerFile());
+        JsonArray shift = new JsonArray(); shift.add(x); shift.add(y); provider.add("shift", shift);
+        provider.addProperty("size", size); provider.addProperty("oversample", oversample);
+        return provider;
+    }
 
     Path definitionPath(Path assetPath) {
         return assetPath.resolve("font").resolve(id.replace('.', '/') + ".json");

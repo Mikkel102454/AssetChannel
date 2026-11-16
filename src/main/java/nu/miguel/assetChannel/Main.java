@@ -35,6 +35,8 @@ public final class Main extends JavaPlugin {
         new CommandListener(this);
 
         assetApi.loadAssets(createPack());
+        getServer().getPluginManager().registerEvents(assetApi.worldAssets(), this);
+        assetApi.worldAssets().initializeLoaded();
 
         packWebServer = new PackWebServer();
         try {
@@ -48,7 +50,10 @@ public final class Main extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        if (assetApi != null) assetApi.stopSessions();
+        if (assetApi != null) {
+            assetApi.stopSessions();
+            assetApi.worldAssets().shutdown();
+        }
         if (packWebServer != null) packWebServer.stopHttpServer();
         getServer().getServicesManager().unregisterAll(this);
     }

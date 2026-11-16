@@ -2,10 +2,13 @@ name: AssetChannel
 version: '${version}'
 
 main: nu.miguel.assetChannel.Main
-api-version: '26.2'
+api-version: '26.3'
 load: POSTWORLD
 
 permissions:
+  assetchannel.blocks.place:
+    description: Allows placing AssetChannel block items (normal protection events still apply)
+    default: true
   assetchannel.command.test:
-    description: Allows AssetChannel pack and playback test commands
+    description: Allows AssetChannel operator commands
     default: op

@@ -16,8 +16,8 @@ import java.util.zip.ZipOutputStream;
 import java.util.UUID;
 
 public class TexturePack {
-    static final int RESOURCE_PACK_FORMAT_MAJOR = 88;
-    static final int RESOURCE_PACK_FORMAT_MINOR = 0;
+    static final int RESOURCE_PACK_FORMAT_MAJOR = 97;
+    static final int RESOURCE_PACK_FORMAT_MINOR = 1;
 
     Path rootPath;
     Path assetPath;

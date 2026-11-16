@@ -1,12 +1,8 @@
-#overrides:
-#  pack:
-#    # Choose where the texturepack should be hosted (Requires server restaret)
-#    # local = Makes a webserver on the Minecraft server (requires another open port)
-#    host-type: "local"
-#    # Default: 25566
-#    port: 25566
-#    # Default: 127.0.0.1
-#    host: 127.0.0.1
+# Pack hosting overrides require a restart.
+# overrides:
+#   pack:
+#     host: 127.0.0.1
+#     port: 25566
 
 # Settings used only by soundtracks with auto-split enabled.
 music:

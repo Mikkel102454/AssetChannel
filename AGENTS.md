@@ -1,6 +1,6 @@
 # AssetChannel agent guide
 
-Paper plugin/API for resource-pack generation/hosting plus fonts, icons, audio, synchronized music, origins, and HUD sessions. Java 25; Paper 26.2.
+Paper plugin/API for resource-pack generation/hosting plus models, textures, fonts, icons, audio, synchronized music, origins, and HUD sessions. Java 25; Paper 26.3.
 
 ## Find things
 
@@ -10,7 +10,7 @@ Paper plugin/API for resource-pack generation/hosting plus fonts, icons, audio, 
 - Pack assembly, web serving, spacing font: `pack/`; pack delivery: `texturepack/`
 - Operator commands: `commands/`; config, paths, FFmpeg/audio readers: `util/`
 - Plugin/default config: `src/main/resources/`; tests mirror packages in `src/test/java/`.
-- Asset layout, API examples, configuration, and operations: `README.md`.
+- Setup and operations: `README.md`; imports: `ASSETS.md`; Java API: `API.md`; displays and blocks: `WORLD-ASSETS.md`.
 
 ## Work rules
 

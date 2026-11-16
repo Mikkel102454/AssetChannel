@@ -23,6 +23,8 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import java.util.*;
 
 public class CommandListener {
+    // This is the final argument: greedyString preserves ':' and '/' without requiring quotes.
+    static StringArgumentType modelIdArgument() { return StringArgumentType.greedyString(); }
     private static final List<String> SOUND_CATEGORIES = Arrays.stream(SoundCategory.values())
             .map(category -> category.name().toLowerCase(Locale.ROOT))
             .toList();
@@ -47,8 +49,73 @@ public class CommandListener {
                 .then(soundCommands())
                 .then(musicCommands())
                 .then(hudCommands())
+                .then(worldDisplayCommands())
+                .then(blockCommands())
+                .then(Commands.literal("resource").then(Commands.literal("list").executes(c -> {
+                    var resources=Main.getAssetApi().resources();
+                    resources.stream().limit(50).forEach(resource->c.getSource().getSender().sendMessage(Component.text(resource.kind()+" "+resource.key().asString())));
+                    c.getSource().getSender().sendMessage(Component.text(resources.size()+" resources (showing up to 50)."));return resources.size();
+                })))
+                .then(Commands.literal("model")
+                        .then(Commands.literal("list").executes(c -> {
+                            Main.getAssetApi().models().forEach(model -> c.getSource().getSender().sendMessage(Component.text(model.id())));
+                            return Main.getAssetApi().models().size();
+                        }))
+                        .then(Commands.literal("give").then(Commands.argument("id", modelIdArgument())
+                                .suggests((c,b) -> suggest(b, Main.getAssetApi().models().stream().map(ModelAsset::id).toList()))
+                                .executes(c -> {
+                                    if (!(c.getSource().getSender() instanceof Player player)) return playerOnly(c);
+                                    if (!Main.getInternalApi().isPackReady(player.getUniqueId())) { player.sendRichMessage("<yellow>Current pack is not ready."); return 0; }
+                                    var model = Main.getAssetApi().model(StringArgumentType.getString(c, "id"));
+                                    if (model.isEmpty()) { player.sendRichMessage("<red>Unknown model."); return 0; }
+                                    if (player.getInventory().firstEmpty() < 0) { player.sendRichMessage("<yellow>Make room in your inventory."); return 0; }
+                                    player.getInventory().addItem(model.get().createItem(org.bukkit.Material.PAPER)); return 1;
+                                }))))
                 .build();
 
+    }
+
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> worldDisplayCommands() {
+        return Commands.literal("display")
+                .then(Commands.literal("spawn").then(Commands.argument("id",modelIdArgument())
+                        .suggests((c,b)->suggest(b,Main.getAssetApi().models().stream().map(ModelAsset::id).toList()))
+                        .executes(c->{
+                            if(!(c.getSource().getSender() instanceof Player player))return playerOnly(c);
+                            if(!Main.getAssetApi().isPackReady(player)){player.sendRichMessage("<yellow>Wait for the pack to load.");return 0;}
+                            try {
+                                var location=player.getLocation().add(player.getLocation().getDirection().multiply(2)).add(0,1,0);
+                                location.setPitch(0);
+                                var display=Main.getAssetApi().spawnItemDisplay(location,StringArgumentType.getString(c,"id"),DisplayOptions.defaults());
+                                player.sendMessage(Component.text("Spawned display "+display.getUniqueId()));return 1;
+                            }catch(IllegalArgumentException|IllegalStateException error){player.sendMessage(Component.text(error.getMessage()));return 0;}
+                        })))
+                .then(Commands.literal("remove").then(Commands.argument("uuid",ArgumentTypes.uuid())
+                        .executes(c->{
+                            try{return Main.getAssetApi().removeDisplay(c.getArgument("uuid",UUID.class))?1:0;}
+                            catch(IllegalArgumentException error){c.getSource().getSender().sendMessage(Component.text(error.getMessage()));return 0;}
+                        })))
+                .then(Commands.literal("list").executes(c->{
+                    var displays=Main.getAssetApi().displays();displays.forEach(display->c.getSource().getSender().sendMessage(Component.text(display.getUniqueId()+" "+display.getType())));return displays.size();
+                }));
+    }
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> blockCommands() {
+        return Commands.literal("block")
+                .then(Commands.literal("list").executes(c->{Main.getAssetApi().blocks().forEach(block->c.getSource().getSender().sendMessage(Component.text(block.id()+" -> "+block.model())));return Main.getAssetApi().blocks().size();}))
+                .then(Commands.literal("give").then(Commands.argument("id",modelIdArgument())
+                        .suggests((c,b)->suggest(b,Main.getAssetApi().blocks().stream().map(BlockAsset::id).toList()))
+                        .executes(c->{
+                            if(!(c.getSource().getSender() instanceof Player player))return playerOnly(c);
+                            if(!Main.getAssetApi().isPackReady(player)){player.sendRichMessage("<yellow>Wait for the pack to load.");return 0;}
+                            if(player.getInventory().firstEmpty()<0){player.sendRichMessage("<yellow>Make room in your inventory.");return 0;}
+                            try{player.getInventory().addItem(Main.getAssetApi().createBlockItem(StringArgumentType.getString(c,"id")));return 1;}
+                            catch(IllegalArgumentException error){player.sendMessage(Component.text(error.getMessage()));return 0;}
+                        })))
+                .then(Commands.literal("remove").executes(c->{
+                    if(!(c.getSource().getSender() instanceof Player player))return playerOnly(c);
+                    var target=player.getTargetBlockExact(6);
+                    if(target==null)return 0;
+                    return Main.getAssetApi().removeBlock(target.getLocation(),false)?1:0;
+                }));
     }
 
     private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> iconCommands() {

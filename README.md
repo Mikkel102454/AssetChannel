@@ -1,10 +1,20 @@
 # AssetChannel
 
-AssetChannel turns fonts, icons, sounds, adaptive music, and reusable HUD templates into a Minecraft resource pack and exposes them through a Paper API.
+AssetChannel imports and manages models, textures, fonts, icons, sounds, adaptive music, and reusable HUD templates, builds a Minecraft resource pack, and exposes assets through a Paper API. Consuming plugins own menus and game logic.
+
+For importing models, textures, fonts and native resource packs, see [Assets](ASSETS.md).
+
+For displays, placeable model blocks and their effects, see [World assets](WORLD-ASSETS.md).
+
+For dependency setup, Java examples, method references and lifecycle rules, see the [API guide](API.md).
 
 ## What it provides
 
 - Automatic resource-pack generation and hosting
+- Native models, textures, item definitions, pack metadata and version overlays
+- Managed item/block displays with pack-ready visibility
+- Placeable model blocks with persistence, drops, sounds and particles
+- Native resource catalog for fonts, equipment, particles, atlases, shaders and other categories
 - Listener-relative stereo and positional mono audio variants
 - Short synchronized music clips for fast late joins
 - Smooth streamed tracks when synchronization is not required
@@ -15,7 +25,7 @@ AssetChannel turns fonts, icons, sounds, adaptive music, and reusable HUD templa
 
 ## Requirements
 
-- Paper 26.2
+- Paper 26.3
 - Java 25
 - A reachable HTTP port for the generated resource pack
 
@@ -33,11 +43,19 @@ For remote players, set `overrides.pack.host` in `config.yml` to a hostname or a
 
 ## Asset layout
 
-All asset IDs are lowercase and dot-separated versions of their paths.
+Generated assets and block definitions use lowercase, dot-separated IDs. Imported models and fonts use native `namespace:path` IDs, preserving slashes.
 
 ```text
 plugins/AssetChannel/
 |-- config.yml
+|-- blocks/
+|   `-- decorations/crystal.yml
+|-- imports/
+|   |-- assets/myserver/
+|   |   |-- items/ui/button.json
+|   |   |-- models/ui/button.json
+|   |   `-- textures/ui/button.png
+|   `-- pack/                    # optional native pack root: pack.mcmeta, assets/, overlays, pack.png
 |-- font/
 |   `-- ui/title.ttf
 |-- icons/
@@ -60,6 +78,21 @@ Examples:
 - `sound/npc/talk.mp3` becomes sound ID `npc.talk`.
 - `music/lobby/` becomes soundtrack ID `lobby`.
 - `hud/notification/banner.yml` becomes HUD template ID `notification.banner`.
+- `blocks/decorations/crystal.yml` becomes block asset ID `decorations.crystal`.
+- `imports/assets/myserver/items/ui/button.json` becomes model ID `myserver:ui/button`.
+- Its native file descriptor has key `myserver:items/ui/button.json` in `resources()`.
+
+### Models and placeable blocks
+
+Import an item definition and its model/textures as described in [Assets](ASSETS.md). Add a [block definition](WORLD-ASSETS.md#block-definitions) for placeable blocks. Rebuild with `/asset texturepack generate`, accept the refreshed pack, then:
+
+```text
+/asset model give myserver:ui/button
+/asset display spawn myserver:ui/button
+/asset block give decorations.crystal
+```
+
+The model command gives a visual item. The block command gives a tagged placeable item: right-click a block face to place it in adjacent empty space. Managed blocks use a vanilla collision carrier plus an item display and break instantly. Their YAML definitions configure sounds, particles and drops.
 
 ### HUD templates
 
@@ -259,7 +292,9 @@ AssetChannelApi assets = Bukkit.getServicesManager().load(AssetChannelApi.class)
 if (assets == null) throw new IllegalStateException("AssetChannel is unavailable");
 ```
 
-All API calls that mutate or start playback must run on the server thread.
+Use the API on the Paper server thread. World methods require already loaded chunks and never load chunks for you. AssetChannel gates managed displays, effects and playback on resource-pack readiness; your own inventories and model items should check `assets.isPackReady(player)` before showing pack-dependent visuals.
+
+The [API guide](API.md) includes compile-only dependency setup, ready-to-adapt examples, model/block ID conventions, method references and ownership rules. The sections below cover the existing audio and HUD APIs in more depth.
 
 ### Start a soundtrack
 
@@ -353,6 +388,15 @@ Commands require `assetchannel.command.test`, granted to operators by default.
 
 ```text
 /asset texturepack generate
+/asset model list
+/asset model give <namespace:path>
+/asset display spawn <namespace:path>
+/asset display list
+/asset display remove <uuid>
+/asset block list
+/asset block give <block-id>
+/asset block remove
+/asset resource list
 /asset icon test <id>
 /asset icon info <id>
 /asset icon list
@@ -384,10 +428,14 @@ Commands require `assetchannel.command.test`, granted to operators by default.
 HUD command values use MiniMessage and are separated with semicolons. For example:
 
 ```text
-/asset hud show @s demo.quest-notification with heading=<gold>Test;body=Hello world
-/asset hud update @s quest-notification heading=<yellow>Updated;body=Still visible
-/asset hud hide @s quest-notification
+/asset hud show @s notification.banner with heading=<gold>Test;body=Hello world
+/asset hud update @s notifications heading=<yellow>Updated;body=Still visible
+/asset hud hide @s notifications
 ```
+
+Namespaced IDs accept `:` and `/` without quotes. `/asset display spawn` places a persistent model in front of you and prints its UUID. `/asset block remove` removes the managed block you are looking at within six blocks, without drops or effects. `/asset resource list` prints up to 50 native descriptors and the total count.
+
+Player placement with a tagged block item uses the separate `assetchannel.blocks.place` permission, granted by default. Placement/break handling respects cancelled events; operator API/command removal is administrative. Menus, navigation and game logic belong to the consuming plugin.
 
 ## Reliability behavior
 
@@ -399,6 +447,8 @@ HUD command values use MiniMessage and are separated with semicolons. For exampl
 - A failed build leaves the previous pack and active playback untouched.
 - Resource-pack readiness events are accepted only for AssetChannel's pack UUID.
 - All music sessions share one tick scheduler, and stop operations target only recently active clips.
+- Managed displays retain ownership metadata; block records persist in chunk data.
+- Chunk/entity reconciliation uses one shared task, handling at most 32 chunks per tick.
 
 Successful publication reloads the pack for online players. Active sessions stop because their sound keys belong to the previous client pack; start new sessions after players report that the new pack loaded.
 
@@ -426,3 +476,5 @@ The first build creates listener and spatial variants. Later builds reuse the co
 ### A generated pack is rejected
 
 Check that every source is a valid MP3 or OGG Vorbis file, every supported audio file appears exactly once in `order`, IDs are lowercase, and staged soundtracks do not mix root audio with a `stages/` directory. Files with other extensions are not audio inputs, and invalid or audio-less MP3 files make pack generation fail.
+
+For native assets, check the reported JSON/dependency/path error. Bitmap font source cells must fit the 256x256 glyph atlas, even when rendered smaller. See [asset troubleshooting](ASSETS.md#troubleshooting) for missing glyphs, lost inventory-title fonts and missing item textures.

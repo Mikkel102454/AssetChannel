@@ -26,6 +26,10 @@ public class PackDeveloper {
             scanFonts(assets);
             scanMusic(assets);
             scanHuds(assets);
+            for(AssetFile file:scanFiles(PathResolver.getDataPath().toPath().resolve("blocks"),Set.of("yml","yaml")))
+                assets.add(BlockDefinition.load(file.id(),file.path()));
+            var extras=PackExtras.scan(PathResolver.getDataPath().toPath().resolve("imports/pack"),PathResolver.getDataPath().toPath().resolve("imports/assets"));
+            assets.add(extras.resources());assets.add(extras);
 
         } catch (IOException e) {
             throw new RuntimeException("Failed to scan asset folders", e);
@@ -73,6 +77,13 @@ public class PackDeveloper {
     }
 
     static void validateAssets(List<Asset> assets) {
+        Set<String> itemModels=assets.stream().filter(ImportedResources.class::isInstance).map(ImportedResources.class::cast)
+                .flatMap(imported->imported.models().stream()).map(nu.miguel.assetChannel.api.ModelAsset::id).collect(java.util.stream.Collectors.toSet());
+        for(Asset asset:assets)if(asset instanceof BlockDefinition block) {
+            if(!itemModels.contains(block.descriptor().model()))throw new IllegalArgumentException("Block "+block.getId()+" references missing item model "+block.descriptor().model());
+            if(block.descriptor().particleModel()!=null&&!itemModels.contains(block.descriptor().particleModel()))
+                throw new IllegalArgumentException("Block "+block.getId()+" references missing particle item model "+block.descriptor().particleModel());
+        }
         assignIconCodePoints(assets);
         Set<String> typedIds = new HashSet<>();
         Set<Integer> iconCodePoints = new HashSet<>();
@@ -88,6 +99,9 @@ public class PackDeveloper {
         }
         Set<String> icons = assets.stream().filter(Icon.class::isInstance).map(Asset::getId).collect(java.util.stream.Collectors.toSet());
         Set<String> fonts = assets.stream().filter(Font.class::isInstance).map(Asset::getId).collect(java.util.stream.Collectors.toSet());
+        for (Asset asset : assets) if (asset instanceof ImportedResources imported)
+            imported.fonts().stream().filter(font -> font.key().namespace().equals("assetchannel"))
+                    .forEach(font -> fonts.add(font.key().value().replace('/', '.')));
         for (Asset asset : assets) if (asset instanceof Hud hud) {
             if (hud.background() != null && !icons.contains(hud.background()))
                 throw new IllegalArgumentException("HUD " + hud.getId() + " references unknown background icon '" + hud.background() + "'");
@@ -119,6 +133,11 @@ public class PackDeveloper {
     }
 
     private static void validateHudTags(Hud hud, String text, Set<String> icons, Set<String> fonts) {
+        var spacingMatcher = java.util.regex.Pattern.compile("<space:([^>]+)>").matcher(text);
+        while (spacingMatcher.find()) {
+            try { SpacingFont.component(Integer.parseInt(spacingMatcher.group(1))); }
+            catch (RuntimeException error) { throw new IllegalArgumentException("HUD " + hud.getId() + " has invalid spacing: " + spacingMatcher.group(), error); }
+        }
         var iconsMatcher = java.util.regex.Pattern.compile("<icon:([a-z0-9._-]+)>").matcher(text);
         while (iconsMatcher.find()) if (!icons.contains(iconsMatcher.group(1)))
             throw new IllegalArgumentException("HUD " + hud.getId() + " references unknown icon '" + iconsMatcher.group(1) + "'");
@@ -137,7 +156,7 @@ public class PackDeveloper {
                 args.popOr("Icon id is required");
                 return net.kyori.adventure.text.minimessage.tag.Tag.inserting(net.kyori.adventure.text.Component.empty());
             });
-            net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(text, empty, emptyIcon);
+            net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(text, empty, emptyIcon, SpacingFont.resolver());
         } catch (RuntimeException error) {
             throw new IllegalArgumentException("HUD " + hud.getId() + " contains invalid MiniMessage: " + error.getMessage(), error);
         }

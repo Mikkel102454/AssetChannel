@@ -23,6 +23,8 @@ public class PackBuilder {
             if (!buildSounds(texturePack, assets)) return false;
             if (!buildMusic(texturePack, assets)) return false;
             if (!SpacingFont.build(texturePack)) return false;
+            for (Asset asset : assets) if (asset instanceof ImportedResources && !asset.build(texturePack)) return false;
+            for (Asset asset : assets) if (asset instanceof PackExtras && !asset.build(texturePack)) return false;
             texturePack.publish();
             published = true;
             return true;

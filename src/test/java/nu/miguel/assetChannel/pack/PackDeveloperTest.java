@@ -15,6 +15,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PackDeveloperTest {
+    @Test void rejectsInvalidSpacingBeforePackPublication() throws Exception {
+        Path yaml = directory.resolve("bad.yml");
+        Files.writeString(yaml, "surface: action-bar\nlayout: {content: '<space:999999>'}\n");
+        var hud = nu.miguel.assetChannel.asset.Hud.load("bad", yaml);
+        assertThrows(IllegalArgumentException.class, () -> PackDeveloper.validateAssets(List.of(hud)));
+    }
+    @Test void acceptsImportedFontInHud() throws Exception {
+        Path nativeFont = directory.resolve("imports/assetchannel/font/panel.json");
+        Files.createDirectories(nativeFont.getParent()); Files.writeString(nativeFont, "{\"providers\":[]}");
+        Path yaml = directory.resolve("native.yml");
+        Files.writeString(yaml, "surface: boss-bar\nlayout: {content: '<font:assetchannel:panel>test</font>'}\n");
+        var hud = nu.miguel.assetChannel.asset.Hud.load("native", yaml);
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> PackDeveloper.validateAssets(List.of(hud, ImportedResources.scan(directory.resolve("imports")))));
+    }
     @TempDir Path directory;
 
     @Test void discoversMp3AndOggCaseInsensitively() throws Exception {

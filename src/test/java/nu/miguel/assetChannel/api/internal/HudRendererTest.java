@@ -10,6 +10,22 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class HudRendererTest {
+    @Test void clipsIconsUsingTheirActualWidthAndStopsAtFirstOverflow() throws Exception {
+        Path file=directory.resolve("clip.yml"); Files.writeString(file,"""
+                surface: action-bar
+                layout: {content: "<icon:wide>i", width: 10, overflow: clip}
+                """);
+        var icon = new nu.miguel.assetChannel.api.IconAsset("wide", net.kyori.adventure.key.Key.key("assetchannel:icons"), 0xE001, 16, 8, 30);
+        var renderer = new HudRenderer(Map.of("wide", icon));
+        var result = renderer.render(Hud.load("clip", file), Map.of(), false);
+        String plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(result);
+        assertFalse(plain.contains(icon.character()));
+        assertFalse(plain.contains("i"));
+    }
+    @Test void explicitSpacingMovesCursorByExactAdvance() {
+        var renderer = new HudRenderer(Map.of());
+        assertEquals(5, renderer.width(renderer.parseAssetText("a<space:-6>b")));
+    }
     @TempDir Path directory;
     @Test void validatesRequiredAndUnknownVariablesAndInsertsComponentsDirectly()throws Exception{
         Path file=directory.resolve("hud.yml");Files.writeString(file,"""

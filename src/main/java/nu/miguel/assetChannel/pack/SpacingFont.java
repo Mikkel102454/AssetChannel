@@ -13,6 +13,24 @@ public final class SpacingFont {
         if (advance < MIN || advance > MAX || advance == 0) throw new IllegalArgumentException("Unsupported spacing advance " + advance);
         return Character.toString(BASE + advance - MIN);
     }
+    /** Shared MiniMessage resolver for HUDs and consuming plugins' inventory titles. */
+    public static net.kyori.adventure.text.minimessage.tag.resolver.TagResolver resolver() {
+        return net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.resolver("space", (args, context) -> {
+            int pixels = Integer.parseInt(args.popOr("Pixel advance required").value());
+            if (Math.abs((long)pixels) > 16384) throw new IllegalArgumentException("Spacing must be within +/-16384");
+            return net.kyori.adventure.text.minimessage.tag.Tag.inserting(component(pixels));
+        });
+    }
+    public static net.kyori.adventure.text.Component component(int pixels) {
+        if (Math.abs((long)pixels) > 16384) throw new IllegalArgumentException("Spacing must be within +/-16384");
+        var result = net.kyori.adventure.text.Component.empty();
+        while (pixels != 0) {
+            int step = Math.max(MIN, Math.min(MAX, pixels));
+            result = result.append(net.kyori.adventure.text.Component.text(character(step)).font(net.kyori.adventure.key.Key.key(KEY)));
+            pixels -= step;
+        }
+        return result;
+    }
     public static boolean build(TexturePack pack) {
         try {
             JsonObject advances = new JsonObject();

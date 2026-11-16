@@ -6,12 +6,12 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TexturePackTest {
-    @Test void emitsMinecraft262PackMetadata() {
-        var pack = JsonParser.parseString(TexturePack.metadata(88, 0, "test"))
+    @Test void emitsMinecraft263PackMetadata() {
+        var pack = JsonParser.parseString(TexturePack.metadata(TexturePack.RESOURCE_PACK_FORMAT_MAJOR, TexturePack.RESOURCE_PACK_FORMAT_MINOR, "test"))
                 .getAsJsonObject().getAsJsonObject("pack");
 
-        assertEquals(88, pack.getAsJsonArray("min_format").get(0).getAsInt());
-        assertEquals(0, pack.getAsJsonArray("min_format").get(1).getAsInt());
+        assertEquals(97, pack.getAsJsonArray("min_format").get(0).getAsInt());
+        assertEquals(1, pack.getAsJsonArray("min_format").get(1).getAsInt());
         assertEquals(pack.get("min_format"), pack.get("max_format"));
     }
 }

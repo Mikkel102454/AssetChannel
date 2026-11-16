@@ -13,6 +13,11 @@ import org.bukkit.scheduler.BukkitTask;
 import java.util.*;
 
 public final class AssetChannelApiImpl implements AssetChannelApi {
+    private Map<String, BlockAsset> blockAssets = Map.of();
+    private List<ResourceAsset> nativeResources = List.of();
+    private final WorldAssetManager worldAssets = new WorldAssetManager(this);
+    public WorldAssetManager worldAssets() { return worldAssets; }
+    private Map<String, ModelAsset> itemModels = Map.of();
     private Map<String, IconAsset> icons = Map.of();
     private Map<String, FontAsset> fonts = Map.of();
     private Map<String, SoundAsset> sounds = Map.of();
@@ -28,12 +33,21 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     public void loadAssets(List<Asset> assets) {
         requireMainThread();
         Map<String, IconAsset> newIcons = new TreeMap<>();
+        Map<String, ModelAsset> newItemModels = new TreeMap<>();
+        Map<String, BlockAsset> newBlocks = new TreeMap<>();
+        List<ResourceAsset> newResources = new ArrayList<>();
         Map<String, FontAsset> newFonts = new TreeMap<>();
         Map<String, SoundAsset> newSounds = new TreeMap<>();
         Map<String, SoundtrackAsset> newTracks = new TreeMap<>();
         Map<String, Music> models = new HashMap<>();
         Map<String, String> newSpatialSoundKeys = new HashMap<>();
         for (Asset asset : assets) {
+            if (asset instanceof nu.miguel.assetChannel.pack.ImportedResources imported) {
+                newResources.addAll(imported.resources());
+                imported.models().forEach(model -> newItemModels.put(model.id(), model));
+                imported.fonts().forEach(font -> newFonts.put(font.id(), font));
+            }
+            if(asset instanceof BlockDefinition block)newBlocks.put(block.getId(),block.descriptor());
             if (asset instanceof Icon icon) newIcons.put(icon.getId(), new IconAsset(icon.getId(),
                     Key.key(Icon.FONT_KEY), icon.getCodePoint(), icon.getHeight(), icon.getAscent(), icon.getWidth()));
             else if (asset instanceof Font font) newFonts.put(font.getId(), new FontAsset(font.getId(), Key.key(font.getKey())));
@@ -52,6 +66,9 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
             }
         }
         icons = Collections.unmodifiableMap(newIcons);
+        itemModels = Collections.unmodifiableMap(newItemModels);
+        blockAssets = Collections.unmodifiableMap(newBlocks);
+        nativeResources = List.copyOf(newResources);
         fonts = Collections.unmodifiableMap(newFonts);
         sounds = Collections.unmodifiableMap(newSounds);
         soundtracks = Collections.unmodifiableMap(newTracks);
@@ -63,6 +80,8 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     public void setPackReady(Player player, boolean ready) {
         requireMainThread();
         if (ready) packReady.add(player.getUniqueId()); else packReady.remove(player.getUniqueId());
+        hudManager.packReadyChanged(player.getUniqueId(), ready);
+        worldAssets.playerReadiness(player,ready);
     }
     public boolean isPackReady(UUID id) { return packReady.contains(id); }
 
@@ -114,6 +133,27 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     }
 
     @Override public Collection<IconAsset> icons() { return icons.values(); }
+    @Override public Collection<BlockAsset> blocks(){return blockAssets.values();}
+    @Override public Optional<BlockAsset> block(String id){return Optional.ofNullable(blockAssets.get(normalize(id)));}
+    @Override public List<ResourceAsset> resources(){return nativeResources;}
+    @Override public boolean isPackReady(Player player){requireMainThread();return isPackReady(player.getUniqueId());}
+    @Override public org.bukkit.entity.ItemDisplay spawnItemDisplay(Location at,String model,DisplayOptions options){return worldAssets.spawnItemDisplay(at,model,options);}
+    @Override public org.bukkit.entity.BlockDisplay spawnBlockDisplay(Location at,org.bukkit.block.data.BlockData data,DisplayOptions options){return worldAssets.spawnBlockDisplay(at,data,options);}
+    @Override public boolean removeDisplay(UUID id){return worldAssets.removeDisplay(id);}
+    @Override public Collection<org.bukkit.entity.Display> displays(){return worldAssets.displays();}
+    @Override public PlacedAssetBlock placeBlock(Location at,String id){return worldAssets.placeBlock(at,id);}
+    @Override public Optional<PlacedAssetBlock> placedBlock(Location at){return worldAssets.placedBlock(at);}
+    @Override public boolean removeBlock(Location at,boolean effects){return worldAssets.removeBlock(at,effects);}
+    @Override public org.bukkit.inventory.ItemStack createBlockItem(String id){return worldAssets.createBlockItem(id);}
+    @Override public <T> void spawnParticle(Location at,org.bukkit.Particle particle,int count,T data){worldAssets.spawnParticle(at,particle,count,data);}
+    @Override public void showBlockDamage(Location at,float progress,int sourceId){worldAssets.showBlockDamage(at,progress,sourceId);}
+    @Override public PlaybackResult playResourceSound(Player player,String key,SoundOrigin origin,SoundCategory category,float volume,float pitch) {
+        requireMainThread();Objects.requireNonNull(player);Objects.requireNonNull(origin);Objects.requireNonNull(category);
+        if(!Float.isFinite(volume)||volume<0||!Float.isFinite(pitch)||pitch<=0)throw new IllegalArgumentException("Invalid sound volume/pitch");
+        return playKey(player,Key.key(key).asString(),category,origin,volume,pitch);
+    }
+    @Override public Collection<ModelAsset> models() { return itemModels.values(); }
+    @Override public Optional<ModelAsset> model(String id) { return Optional.ofNullable(itemModels.get(normalize(id))); }
     @Override public Collection<FontAsset> fonts() { return fonts.values(); }
     @Override public Collection<SoundAsset> sounds() { return sounds.values(); }
     @Override public Collection<SoundtrackAsset> soundtracks() { return soundtracks.values(); }

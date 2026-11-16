@@ -17,7 +17,10 @@ final class HudSessionImpl implements HudSession {
     final Hud template;
     final String slot;
     final int priority;
-    final boolean resumeInterrupted, fallback;
+    final boolean resumeInterrupted;
+    boolean fallback;
+    Component rendered;
+    int refreshTicks;
     final long order;
     Map<String,Component> variables;
     HudSessionState state = HudSessionState.QUEUED;
@@ -36,20 +39,27 @@ final class HudSessionImpl implements HudSession {
     void tick() {
         if (state != HudSessionState.ACTIVE) return;
         Player player = Bukkit.getPlayer(playerId); if (player == null) { manager.close(this, false); return; }
-        if (template.surface() == HudSurface.ACTION_BAR) player.sendActionBar(manager.renderer.render(template, variables, fallback));
+        if (template.surface() == HudSurface.ACTION_BAR && ++refreshTicks >= 20) {
+            player.sendActionBar(rendered); refreshTicks = 0;
+        }
         if (remainingTicks > 0 && --remainingTicks == 0) manager.close(this, true);
     }
     void display() {
         Player player=Bukkit.getPlayer(playerId); if(player==null)return;
         Component main=manager.renderer.render(template,variables,fallback);
+        rendered=main; refreshTicks=0;
         switch(template.surface()) {
-            case BOSS_BAR -> { bossBar=BossBar.bossBar(main,template.bossProgress(),template.bossColor(),template.bossOverlay()); player.showBossBar(bossBar); }
+            case BOSS_BAR -> {
+                if (bossBar == null) { bossBar=BossBar.bossBar(main,template.bossProgress(),template.bossColor(),template.bossOverlay()); player.showBossBar(bossBar); }
+                else bossBar.name(main);
+            }
             case ACTION_BAR -> player.sendActionBar(main);
             case TITLE -> player.showTitle(Title.title(main,manager.renderer.subtitle(template,variables,fallback),
                     Title.Times.times(Duration.ofMillis(template.fadeInTicks()*50),Duration.ofMillis(template.stayTicks()*50),Duration.ofMillis(template.fadeOutTicks()*50))));
         }
     }
     void hide() {
+        if (state != HudSessionState.ACTIVE) return;
         Player player=Bukkit.getPlayer(playerId); if(player==null)return;
         if(bossBar!=null){player.hideBossBar(bossBar);bossBar=null;}
         else if(template.surface()==HudSurface.ACTION_BAR)player.sendActionBar(Component.empty());
@@ -64,7 +74,14 @@ final class HudSessionImpl implements HudSession {
         if(state==HudSessionState.CLOSED || !template.variables().keySet().containsAll(changes.keySet()))return false;
         Map<String,Component> merged=new LinkedHashMap<>(variables); merged.putAll(changes);
         Map<String,Component> resolved=manager.renderer.resolve(template,merged); if(resolved==null)return false;
-        variables=resolved; if(state==HudSessionState.ACTIVE){hide();display();} return true;
+        if (variables.equals(resolved)) return true;
+        variables=resolved; if(state==HudSessionState.ACTIVE) displayUpdate(); return true;
+    }
+    void displayUpdate() {
+        if (template.surface() != HudSurface.TITLE) { display(); return; }
+        Player player = Bukkit.getPlayer(playerId); if (player == null) return;
+        player.sendTitlePart(net.kyori.adventure.title.TitlePart.TITLE, manager.renderer.render(template, variables, fallback));
+        player.sendTitlePart(net.kyori.adventure.title.TitlePart.SUBTITLE, manager.renderer.subtitle(template, variables, fallback));
     }
     @Override public void close(){AssetChannelApiImpl.requireMainThread();manager.close(this,true);}
 }

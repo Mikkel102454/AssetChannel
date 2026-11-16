@@ -64,6 +64,14 @@ final class HudManager {
     }
     void clear(){for(HudSessionImpl s:List.copyOf(sessions.values()))close(s,false);active.clear();queues.clear();if(ticker!=null){ticker.cancel();ticker=null;}}
     void onQuit(UUID player){for(HudSessionImpl s:List.copyOf(sessions.values()))if(s.playerId.equals(player))close(s,false);}
+    void packReadyChanged(UUID player, boolean ready) {
+        for (HudSessionImpl session : List.copyOf(sessions.values())) {
+            if (!session.playerId.equals(player) || session.fallback == !ready) continue;
+            if (!ready && session.template.fallback() == Hud.Fallback.FAIL) { close(session, true); continue; }
+            session.fallback = !ready;
+            if (session.state == HudSessionState.ACTIVE) session.displayUpdate();
+        }
+    }
     private void promote(PlayerSurface key){List<HudSessionImpl> q=queues.get(key);if(q==null||q.isEmpty())return;sort(q);HudSessionImpl next=q.removeFirst();if(q.isEmpty())queues.remove(key);active.put(key,next);next.activate();}
     private void enqueue(PlayerSurface key,HudSessionImpl value){
         List<HudSessionImpl> q=queues.computeIfAbsent(key,k->new ArrayList<>());q.add(value);sort(q);
