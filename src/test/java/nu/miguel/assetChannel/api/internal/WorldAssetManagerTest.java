@@ -31,6 +31,7 @@ class WorldAssetManagerTest {
         location=new Location(world,1,64,1); current=new AtomicReference<>(air); stored=new AtomicReference<>();
         when(air.getAsString()).thenReturn("minecraft:air"); when(carrier.getAsString()).thenReturn("minecraft:barrier");
         when(world.getUID()).thenReturn(UUID.randomUUID()); when(world.getPlayers()).thenReturn(List.of());
+        when(chunk.getWorld()).thenReturn(world);
         when(world.isChunkLoaded(0,0)).thenReturn(true); when(world.getMinHeight()).thenReturn(-64);when(world.getMaxHeight()).thenReturn(320);
         when(carrier.getMaterial()).thenReturn(Material.BARRIER);
         when(world.getBlockAt(1,64,1)).thenReturn(block); when(world.getChunkAt(0,0)).thenReturn(chunk);
@@ -52,14 +53,106 @@ class WorldAssetManagerTest {
         bukkit.when(()->Bukkit.createBlockData("minecraft:air")).thenReturn(air);
         bukkit.when(()->Bukkit.createBlockData("minecraft:stone")).thenReturn(carrier);
         bukkit.when(()->Bukkit.getEntity(display.getUniqueId())).thenReturn(display);
+        var scheduler=mock(org.bukkit.scheduler.BukkitScheduler.class);
+        bukkit.when(Bukkit::getScheduler).thenReturn(scheduler);
+        when(scheduler.runTaskTimer(eq(Main.plugin),any(Runnable.class),eq(1L),eq(1L))).thenReturn(mock(org.bukkit.scheduler.BukkitTask.class));
         when(world.spawn(any(Location.class),eq(ItemDisplay.class),any(Consumer.class))).thenAnswer(i->{((Consumer<ItemDisplay>)i.getArgument(2)).accept(display);return display;});
         manager=new WorldAssetManager(api);
     }
     @AfterEach void teardown(){ bukkit.close();Main.plugin=oldPlugin; }
+    @Test void nativePlacementUsesOneRealBlockWithoutABarrierOrDisplay(@org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
+        var yaml = root.resolve("native.yml");
+        java.nio.file.Files.writeString(yaml, "model: demo:cube\nblock-state: minecraft:note_block[instrument=pling,note=24,powered=false]\nblock-model: demo:cube\n");
+        when(api.block("warning_block")).thenReturn(Optional.of(nu.miguel.assetChannel.asset.BlockDefinition.load("warning_block", yaml).descriptor()));
+        BlockData note = mock(BlockData.class);
+        when(note.getAsString()).thenReturn("minecraft:note_block[instrument=pling,note=24,powered=false]"); when(note.getMaterial()).thenReturn(Material.NOTE_BLOCK);
+        bukkit.when(() -> Bukkit.createBlockData("minecraft:note_block[instrument=pling,note=24,powered=false]")).thenReturn(note);
+        var placed = manager.placeBlock(location, "warning_block");
+        verify(block).setBlockData(note, false); verify(block, never()).setBlockData(carrier, false);
+        assertNull(placed.displayId());
+        verify(world, never()).spawn(any(Location.class), eq(ItemDisplay.class), any(Consumer.class));
+        when(chunk.isLoaded()).thenReturn(true); when(chunk.isEntitiesLoaded()).thenReturn(true); when(chunk.getWorld()).thenReturn(world);
+        when(chunk.getEntities()).thenReturn(new org.bukkit.entity.Entity[0]);
+        manager.reconcile(chunk);
+        assertTrue(new WorldAssetManager(api).placedBlock(location).isPresent());
+        verify(world, never()).spawn(any(Location.class), eq(ItemDisplay.class), any(Consumer.class));
+        var sound = mock(org.bukkit.event.block.NotePlayEvent.class); when(sound.getBlock()).thenReturn(block);
+        manager.notePlayed(sound); verify(sound).setCancelled(true);
+        var power = mock(org.bukkit.event.block.BlockRedstoneEvent.class); when(power.getBlock()).thenReturn(block); when(power.getOldCurrent()).thenReturn(0);
+        manager.redstone(power); verify(power).setNewCurrent(0);
+        assertTrue(manager.removeBlock(location, false)); assertSame(air, current.get());
+    }
     @Test void doesNotReplaceAnOccupiedBlock() {
         when(block.getType()).thenReturn(Material.STONE);
         assertThrows(IllegalStateException.class,()->manager.placeBlock(location,"demo.cube"));
         verify(block,never()).setBlockData(any(),anyBoolean());
+    }
+    private BlockData placeNativeBlock() {
+        String state = "minecraft:note_block[instrument=pling,note=24,powered=false]";
+        var nativeData = mock(org.bukkit.block.data.type.NoteBlock.class);
+        when(nativeData.getAsString()).thenReturn(state);
+        when(nativeData.getMaterial()).thenReturn(Material.NOTE_BLOCK);
+        when(nativeData.getNote()).thenReturn(new Note(24));
+        bukkit.when(() -> Bukkit.createBlockData(state)).thenReturn(nativeData);
+        when(api.block("warning_block")).thenReturn(Optional.of(new BlockAsset("warning_block", "demo:cube",
+                "minecraft:barrier", "minecraft:stone", null, null, null, 0, true, state, "demo:cube")));
+        manager.placeBlock(location, "warning_block");
+        when(block.getType()).thenReturn(Material.NOTE_BLOCK);
+        return nativeData;
+    }
+    private void loadedChunk() {
+        when(chunk.isLoaded()).thenReturn(true); when(chunk.isEntitiesLoaded()).thenReturn(true);
+        when(chunk.getWorld()).thenReturn(world); when(chunk.getEntities()).thenReturn(new org.bukkit.entity.Entity[0]);
+    }
+    private void instrumentDrift() {
+        var drifted = mock(org.bukkit.block.data.type.NoteBlock.class);
+        when(drifted.getAsString()).thenReturn("minecraft:note_block[instrument=snare,note=24,powered=false]");
+        when(drifted.getNote()).thenReturn(new Note(24)); current.set(drifted);
+    }
+    @Test void chunkReconciliationRecoversANativeInstrumentChangeWithoutLosingItsRecord() {
+        var reserved = placeNativeBlock(); instrumentDrift(); loadedChunk();
+        manager.reconcile(chunk);
+        assertSame(reserved, current.get());
+        assertEquals("warning_block", manager.placedBlock(location).orElseThrow().asset().id());
+        verify(world, never()).spawn(any(Location.class), eq(ItemDisplay.class), any(Consumer.class));
+    }
+    @Test void physicsRepairsAnAlreadyDriftedNativeInstrument() {
+        var reserved = placeNativeBlock(); instrumentDrift();
+        var event = new org.bukkit.event.block.BlockPhysicsEvent(block, current.get());
+        manager.physics(event);
+        assertTrue(event.isCancelled()); assertSame(reserved, current.get());
+    }
+    @Test void repairsTheShapeUpdateThatHappensAfterThePhysicsEvent() {
+        var reserved = placeNativeBlock(); loadedChunk();
+        manager.physics(new org.bukkit.event.block.BlockPhysicsEvent(block, current.get()));
+        var callback = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+        verify(Bukkit.getScheduler()).runTaskTimer(eq(Main.plugin), callback.capture(), eq(1L), eq(1L));
+        instrumentDrift(); // Paper's vertical updateShape runs after the cancellable neighbor event.
+        callback.getValue().run();
+        assertSame(reserved, current.get()); assertTrue(manager.placedBlock(location).isPresent());
+    }
+    @Test void aSandNeighborQueuesNativeRecoveryWithoutCancellingTheSandPhysics() {
+        var reserved = placeNativeBlock(); loadedChunk();
+        Block sand = mock(Block.class); when(sand.getChunk()).thenReturn(chunk);
+        when(world.getBlockAt(1, 65, 1)).thenReturn(sand);
+        when(sand.getLocation()).thenReturn(new Location(world, 1, 65, 1));
+        when(sand.getX()).thenReturn(1); when(sand.getY()).thenReturn(65); when(sand.getZ()).thenReturn(1);
+        when(sand.getBlockData()).thenReturn(mock(BlockData.class));
+        var event = new org.bukkit.event.block.BlockPhysicsEvent(sand, sand.getBlockData());
+        manager.physics(event); manager.physics(event);
+        assertFalse(event.isCancelled());
+        var callback = org.mockito.ArgumentCaptor.forClass(Runnable.class);
+        verify(Bukkit.getScheduler(), times(1)).runTaskTimer(eq(Main.plugin), callback.capture(), eq(1L), eq(1L));
+        instrumentDrift(); callback.getValue().run();
+        assertSame(reserved, current.get());
+    }
+    @Test void nativeRecoveryDoesNotOverwriteAReplacementBlockOrAnUnrelatedNote() {
+        placeNativeBlock(); loadedChunk();
+        var changed = mock(org.bukkit.block.data.type.NoteBlock.class);
+        when(changed.getAsString()).thenReturn("minecraft:note_block[instrument=harp,note=0,powered=false]");
+        when(changed.getNote()).thenReturn(new Note(0)); current.set(changed);
+        manager.reconcile(chunk);
+        assertSame(changed, current.get()); assertTrue(manager.placedBlock(location).isEmpty());
     }
     @Test void failedDisplaySpawnRestoresCarrierAndDoesNotPersistPlacement() {
         when(world.spawn(any(Location.class),eq(ItemDisplay.class),any(Consumer.class))).thenThrow(new IllegalStateException("spawn failed"));

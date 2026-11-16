@@ -19,6 +19,10 @@ public interface AssetChannelApi {
     /** Removes without drops; effects are optional. Does not overwrite external block changes. */
     default boolean removeBlock(org.bukkit.Location location,boolean effects) { throw new UnsupportedOperationException(); }
     default org.bukkit.inventory.ItemStack createBlockItem(String assetId) { throw new UnsupportedOperationException(); }
+    /** Shows a native-state asset to one pack-ready player without changing the real world. */
+    default BlockOverlay showBlockOverlay(Player player, org.bukkit.Location location, String assetId) { throw new UnsupportedOperationException(); }
+    default Optional<BlockOverlay> blockOverlay(UUID id) { return Optional.empty(); }
+    default Collection<BlockOverlay> blockOverlays(Player player) { return List.of(); }
     /** Typed vanilla particles, sent only to nearby players with the active pack. */
     default <T> void spawnParticle(org.bukkit.Location location,org.bukkit.Particle particle,int count,T data) { throw new UnsupportedOperationException(); }
     /** Client crack overlay; use a distinct source ID per animation and progress zero to clear it. */

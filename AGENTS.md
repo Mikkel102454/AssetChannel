@@ -8,6 +8,7 @@ Paper plugin/API for resource-pack generation/hosting plus models, textures, fon
 - Consumer-facing contracts: `api/`; implementations, HUD, and music sessions: `api/internal/`
 - Source asset parsing/models: `asset/`
 - Pack assembly, web serving, spacing font: `pack/`; pack delivery: `texturepack/`
+- Content folders: `packs/<name>/{assets,definitions,sources}/`; derived files: `generated/`. Layout and upgrade migration: `util/{PathResolver,LegacyLayoutMigration}.java`.
 - Operator commands: `commands/`; config, paths, FFmpeg/audio readers: `util/`
 - Plugin/default config: `src/main/resources/`; tests mirror packages in `src/test/java/`.
 - Setup and operations: `README.md`; imports: `ASSETS.md`; Java API: `API.md`; displays and blocks: `WORLD-ASSETS.md`.
@@ -16,6 +17,7 @@ Paper plugin/API for resource-pack generation/hosting plus models, textures, fon
 
 - Pack publication is transactional: build in staging and keep the previous pack active on failure.
 - Never modify source media; generated/cache files are derived data.
+- Native block assignments in `storage/block-states.json` are persistent server data; retain existing assignments and never recycle removed IDs automatically.
 - Preserve listener-relative channel layout and positional mono behavior.
 - Playback/session work must respect Paper thread rules, bounded shared scheduling, pack readiness, and targeted stop semantics.
 - Public API changes need focused API tests and compatibility awareness.

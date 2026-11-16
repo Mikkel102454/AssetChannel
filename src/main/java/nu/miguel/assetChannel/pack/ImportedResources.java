@@ -13,15 +13,51 @@ import java.util.*;
 public final class ImportedResources implements Asset {
     private final Map<String, byte[]> files;
     private final Map<String, JsonObject> json;
+    private final Set<String> atlasSprites = new HashSet<>();
     private ImportedResources(Map<String, byte[]> files, Map<String, JsonObject> json) {
         this.files = files; this.json = json;
     }
     public static ImportedResources scan(Path assetsRoot) throws IOException {
         return scanLayers(List.of(assetsRoot));
     }
+    boolean hasFile(String path) { return files.containsKey(path); }
+    Map<String, byte[]> sourceFiles() { return files; }
+    static ImportedResources prepared(Map<String, byte[]> files) {
+        Map<String, JsonObject> json = new TreeMap<>();
+        files.forEach((path, bytes) -> {
+            if (path.endsWith(".json") || path.endsWith(".mcmeta"))
+                json.put(path, JsonParser.parseString(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject());
+        });
+        return new ImportedResources(Collections.unmodifiableMap(new TreeMap<>(files)), json);
+    }
     static ImportedResources scanLayers(List<Path> roots) throws IOException {
+        return scanPacks(List.of(roots));
+    }
+    static ImportedResources scanPacks(List<List<Path>> packs) throws IOException {
+        return scanPacks(packs, java.util.function.UnaryOperator.identity());
+    }
+    static ImportedResources scanPacks(List<List<Path>> packs, java.util.function.UnaryOperator<ImportedResources> prepare) throws IOException {
         Map<String, byte[]> files = new TreeMap<>();
         Map<String, JsonObject> json = new TreeMap<>();
+        Map<String, Path> owners = new HashMap<>();
+        for (List<Path> layers : packs) {
+            Map<String, byte[]> packFiles = new TreeMap<>();
+            Map<String, JsonObject> packJson = new TreeMap<>();
+            readLayers(layers, packFiles, packJson);
+            Path owner = layers.getFirst().getParent();
+            for (String file : packFiles.keySet()) {
+                Path previous = owners.putIfAbsent(file, owner);
+                if (previous != null) throw new IllegalArgumentException("Duplicate native resource '" + file
+                        + "' in " + previous + " and " + owner);
+            }
+            files.putAll(packFiles);
+            json.putAll(packJson);
+        }
+        ImportedResources result = new ImportedResources(Collections.unmodifiableMap(files), json);
+        result = prepare.apply(result);
+        result.validate(); return result;
+    }
+    private static void readLayers(List<Path> roots, Map<String, byte[]> files, Map<String, JsonObject> json) throws IOException {
         for(Path assetsRoot:roots) {
         if (Files.exists(assetsRoot)) try (var paths = Files.walk(assetsRoot)) {
             for (Path path : paths.sorted().toList()) {
@@ -37,13 +73,15 @@ public final class ImportedResources implements Asset {
             }
         }
         }
-        ImportedResources result = new ImportedResources(Collections.unmodifiableMap(files), json);
-        result.validate(); return result;
     }
     public List<ModelAsset> models() {
         return json.keySet().stream().filter(p -> isKind(p, "items") && p.endsWith(".json"))
                 .map(p -> p.substring(0, p.indexOf('/')) + ":" + p.substring(p.indexOf("/items/") + 7, p.length() - 5))
-                .map(id -> new ModelAsset(id, Key.key(id))).toList();
+                .map(id -> {
+                    Key key = Key.key(id);
+                    JsonObject definition = json.get(key.namespace() + "/items/" + key.value() + ".json");
+                    return new ModelAsset(id, key, definition.has("assetchannel:internal") && definition.get("assetchannel:internal").getAsBoolean());
+                }).toList();
     }
     public List<nu.miguel.assetChannel.api.ResourceAsset> resources() {
         return files.entrySet().stream().map(entry -> {
@@ -58,6 +96,7 @@ public final class ImportedResources implements Asset {
                 .map(id -> new nu.miguel.assetChannel.api.FontAsset(id, Key.key(id))).toList();
     }
     private void validate() {
+        indexAtlasSprites();
         for (var entry : json.entrySet()) {
             String path = entry.getKey(); JsonObject value = entry.getValue();
             if (isKind(path, "items") && (!value.has("model") || !value.get("model").isJsonObject()))
@@ -71,6 +110,25 @@ public final class ImportedResources implements Asset {
                     require(provider.get("file").getAsString(), type.equals("bitmap") ? "textures" : "font", "", path);
                 if (type.equals("bitmap")) validateBitmap(provider, path);
                 if (type.equals("reference")) require(provider.get("id").getAsString(), "font", ".json", path);
+            }
+        }
+    }
+    private void indexAtlasSprites() {
+        for (var entry : json.entrySet()) {
+            if (!isKind(entry.getKey(), "atlases") || !entry.getValue().has("sources")) continue;
+            for (JsonElement element : entry.getValue().getAsJsonArray("sources")) {
+                JsonObject source = element.getAsJsonObject();
+                String type = source.get("type").getAsString().replace("minecraft:", "");
+                if (!type.equals("single") && !type.equals("unstitch")) continue;
+                String image = source.get("resource").getAsString();
+                require(image, "textures", ".png", entry.getKey());
+                if (type.equals("single")) {
+                    String sprite = source.has("sprite") ? source.get("sprite").getAsString() : image;
+                    atlasSprites.add(resource(sprite, "textures", ".png"));
+                } else for (JsonElement region : source.getAsJsonArray("regions")) {
+                    String sprite = region.getAsJsonObject().get("sprite").getAsString();
+                    atlasSprites.add(resource(sprite, "textures", ".png"));
+                }
             }
         }
     }
@@ -108,7 +166,8 @@ public final class ImportedResources implements Asset {
         if (object.has("textures") && object.get("textures").isJsonObject()) {
             for (JsonElement texture : object.getAsJsonObject("textures").asMap().values()) {
                 String ref = texture.isJsonObject() ? texture.getAsJsonObject().get("sprite").getAsString() : texture.getAsString();
-                if (!ref.startsWith("#")) require(ref, "textures", ".png", source);
+                if (!ref.startsWith("#") && !atlasSprites.contains(resource(ref, "textures", ".png")))
+                    require(ref, "textures", ".png", source);
             }
         }
         object.asMap().values().forEach(e -> validateReferences(e, source));
@@ -141,6 +200,6 @@ public final class ImportedResources implements Asset {
     @Override public String getId() { return "native-imports"; }
     @Override public boolean build(TexturePack pack) {
         try { copyTo(pack.getRootPath().resolve("assets")); return true; }
-        catch (IOException error) { throw new IllegalStateException("Could not stage imports", error); }
+        catch (IOException error) { throw new IllegalStateException("Could not stage native assets", error); }
     }
 }

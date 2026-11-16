@@ -36,6 +36,7 @@ public final class Main extends JavaPlugin {
 
         assetApi.loadAssets(createPack());
         getServer().getPluginManager().registerEvents(assetApi.worldAssets(), this);
+        getServer().getPluginManager().registerEvents(assetApi.blockOverlayManager(), this);
         assetApi.worldAssets().initializeLoaded();
 
         packWebServer = new PackWebServer();

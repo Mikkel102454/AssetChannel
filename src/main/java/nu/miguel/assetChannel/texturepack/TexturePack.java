@@ -26,7 +26,7 @@ public class TexturePack {
     String description = "AssetChannel resource pack";
 
     public TexturePack() {
-        rootPath = PathResolver.getDataPath().toPath().resolve("pack-staging-" + UUID.randomUUID());
+        rootPath = PathResolver.getGeneratedPath().resolve("pack-staging-" + UUID.randomUUID());
         assetPath = rootPath.resolve("assets").resolve("assetchannel");
 
         try {
@@ -54,8 +54,8 @@ public class TexturePack {
     }
 
     public Path publish() {
-        Path zipPath = PathResolver.getDataPath().toPath().resolve("pack.zip");
-        Path temporaryZip = PathResolver.getDataPath().toPath()
+        Path zipPath = PathResolver.getPackZipPath();
+        Path temporaryZip = PathResolver.getGeneratedPath()
                 .resolve("pack.zip.tmp-" + UUID.randomUUID());
 
         try {
@@ -119,8 +119,8 @@ public class TexturePack {
     }
 
     private void replaceDebugPack() {
-        Path published = PathResolver.getDataPath().toPath().resolve("pack");
-        Path old = PathResolver.getDataPath().toPath().resolve("pack-old-" + UUID.randomUUID());
+        Path published = PathResolver.getGeneratedPath().resolve("pack");
+        Path old = PathResolver.getGeneratedPath().resolve("pack-old-" + UUID.randomUUID());
         try {
             if (Files.exists(published)) Files.move(published, old);
             Files.move(rootPath, published);

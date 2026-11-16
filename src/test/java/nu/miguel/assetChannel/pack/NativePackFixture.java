@@ -12,7 +12,8 @@ public final class NativePackFixture {
             write(root.resolve("demo/items/" + name + ".json"),
                     "{\"model\":{\"type\":\"minecraft:model\",\"model\":\"demo:ui/" + name + "\"}}");
             write(root.resolve("demo/models/ui/" + name + ".json"),
-                    "{\"parent\":\"minecraft:item/generated\",\"textures\":{\"layer0\":\"demo:ui/" + name + "\"}}");
+                    name.equals("cube") ? "{\"parent\":\"minecraft:block/cube_all\",\"textures\":{\"all\":\"demo:ui/cube\"}}"
+                            : "{\"parent\":\"minecraft:item/generated\",\"textures\":{\"layer0\":\"demo:ui/" + name + "\"}}");
             Path texture = root.resolve("demo/textures/ui/" + name + ".png");
             Files.createDirectories(texture.getParent());
             ImageIO.write(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB), "png", texture.toFile());

@@ -9,6 +9,7 @@ import net.kyori.adventure.text.Component;
 import nu.miguel.assetChannel.Main;
 import nu.miguel.assetChannel.util.Config;
 import nu.miguel.assetChannel.util.Logger;
+import nu.miguel.assetChannel.util.PathResolver;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -33,7 +34,7 @@ public final class PackWebServer {
 
     public static boolean ownsPack(UUID id) { return PACK_UUID.equals(id); }
 
-    private final Path packZipPath = Main.plugin.getDataPath().resolve(PACK_FILE_NAME);
+    private final Path packZipPath = PathResolver.getPackZipPath();
 
     private HttpServer httpServer;
     private ExecutorService executor;

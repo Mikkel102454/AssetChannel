@@ -14,6 +14,7 @@ For dependency setup, Java examples, method references and lifecycle rules, see 
 - Native models, textures, item definitions, pack metadata and version overlays
 - Managed item/block displays with pack-ready visibility
 - Placeable model blocks with persistence, drops, sounds and particles
+- Native block-state rendering and per-player warning overlays without display entities
 - Native resource catalog for fonts, equipment, particles, atlases, shaders and other categories
 - Listener-relative stereo and positional mono audio variants
 - Short synchronized music clips for fast late joins
@@ -35,7 +36,7 @@ FFmpeg is bundled in the shaded plugin JAR. A system FFmpeg installation is opti
 
 1. Build the plugin and place its shaded JAR in the server's `plugins` directory.
 2. Start the server once so AssetChannel creates its folders and default configuration.
-3. Put assets under `plugins/AssetChannel/` using the layout below.
+3. Put content under `plugins/AssetChannel/packs/main/` using the layout below.
 4. Run `/asset texturepack generate` after changing assets.
 5. Wait for the success message. The build happens in the background and the previous pack remains active if it fails.
 
@@ -43,56 +44,91 @@ For remote players, set `overrides.pack.host` in `config.yml` to a hostname or a
 
 ## Asset layout
 
-Generated assets and block definitions use lowercase, dot-separated IDs. Imported models and fonts use native `namespace:path` IDs, preserving slashes.
+Each folder under `packs/` is a content pack. Asset IDs are relative to their category, so moving an asset between packs does not rename it. Generated assets and block definitions use lowercase, dot-separated IDs; native models and fonts retain `namespace:path` IDs.
 
 ```text
 plugins/AssetChannel/
 |-- config.yml
-|-- blocks/
-|   `-- decorations/crystal.yml
-|-- imports/
-|   |-- assets/myserver/
-|   |   |-- items/ui/button.json
-|   |   |-- models/ui/button.json
-|   |   `-- textures/ui/button.png
-|   `-- pack/                    # optional native pack root: pack.mcmeta, assets/, overlays, pack.png
-|-- font/
-|   `-- ui/title.ttf
-|-- icons/
-|   |-- ui/rank.png
-|   `-- ui/rank.yml
-|-- sound/
-|   `-- npc/talk.mp3
-|-- music/
-|   `-- lobby/
-|       |-- config.yml
-|       `-- main.mp3
-`-- hud/
-    `-- notification/banner.yml
+|-- packs/
+|   `-- main/
+|       |-- assets/myserver/
+|       |   |-- models/block/warning_block.json
+|       |   `-- textures/block/warning_block.png
+|       |-- definitions/
+|       |   |-- blocks/warning_block.yml
+|       |   `-- hud/notification/banner.yml
+|       |-- sources/
+|       |   |-- fonts/ui/title.ttf
+|       |   |-- icons/ui/rank.png
+|       |   |-- icons/ui/rank.yml
+|       |   |-- sounds/npc/talk.mp3
+|       |   `-- music/lobby/
+|       |       |-- config.yml
+|       |       `-- main.mp3
+|       |-- pack.mcmeta           # optional native metadata and overlays
+|       `-- pack.png              # optional pack icon
+`-- generated/
+    |-- pack.zip
+    |-- pack/
+    `-- cache/audio/
 ```
 
-Examples:
+- `assets/` contains native Minecraft resource files.
+- `definitions/` contains AssetChannel block behavior and HUD configuration.
+- `sources/` contains icons, fonts and audio that AssetChannel converts into resources.
+- `generated/` contains derived output and caches; edit the source files instead.
 
-- `font/ui/title.ttf` becomes `assetchannel:ui.title`.
-- `icons/ui/rank.png` becomes icon ID `ui.rank`.
-- `sound/npc/talk.mp3` becomes sound ID `npc.talk`.
-- `music/lobby/` becomes soundtrack ID `lobby`.
-- `hud/notification/banner.yml` becomes HUD template ID `notification.banner`.
-- `blocks/decorations/crystal.yml` becomes block asset ID `decorations.crystal`.
-- `imports/assets/myserver/items/ui/button.json` becomes model ID `myserver:ui/button`.
-- Its native file descriptor has key `myserver:items/ui/button.json` in `resources()`.
+Native block assignments are stored in `storage/block-states.json`. Keep `storage/` with server/world backups; it is persistent data.
+
+For paths relative to `packs/main/`:
+
+| File | Registered ID |
+|---|---|
+| `sources/fonts/ui/title.ttf` | font key `assetchannel:ui.title` |
+| `sources/icons/ui/rank.png` | icon `ui.rank` |
+| `sources/sounds/npc/talk.mp3` | sound `npc.talk` |
+| `sources/music/lobby/` | soundtrack `lobby` |
+| `definitions/hud/notification/banner.yml` | HUD `notification.banner` |
+| `definitions/blocks/warning_block.yml` | block `warning_block` |
+| `assets/myserver/models/block/warning_block.json` with the block definition | model `myserver:block/warning_block` |
+
+All packs contribute to one catalog and generated resource pack. Native references can cross packs. Duplicate IDs within the same asset category and duplicate native resource paths fail the build with both pack locations. Collisions with generated AssetChannel resources also fail; the previous pack stays active.
+
+`main` is read first, followed by other pack folders alphabetically. Pack names must match `[a-z0-9][a-z0-9_-]*`. The first available description and icon are used. Compatible overlays apply within their own pack; their output directories are kept separate. Nonconflicting metadata fields are combined; differing values for the same field fail the build. Files under `definitions/` and `sources/` are never shipped to clients.
+
+### Migration
+
+Startup automatically moves the previous layout into `packs/main/` and `generated/`, preserving file bytes and asset IDs:
+
+| Previous location | New location |
+|---|---|
+| `imports/assets/` | `packs/main/assets/` |
+| `imports/pack/` | `packs/main/` |
+| `blocks/`, `hud/` | `packs/main/definitions/blocks/`, `packs/main/definitions/hud/` |
+| `icons/`, `font/` | `packs/main/sources/icons/`, `packs/main/sources/fonts/` |
+| `sound/`, `music/` | `packs/main/sources/sounds/`, `packs/main/sources/music/` |
+| `pack.zip`, `pack/`, `cache/` | the same names under `generated/` |
+
+Migration checks all destinations first. Identical files are coalesced; differing files stop migration before anything is moved. This includes conflicts between loose imports and an extracted native pack. Resolve the reported files before restarting. `config.yml`, worlds and persistent block IDs remain in place. The HTTP URL remains `/pack.zip`.
 
 ### Models and placeable blocks
 
-Import an item definition and its model/textures as described in [Assets](ASSETS.md). Add a [block definition](WORLD-ASSETS.md#block-definitions) for placeable blocks. Rebuild with `/asset texturepack generate`, accept the refreshed pack, then:
+Put a model and its textures under `packs/main/assets/`, then create `packs/main/definitions/blocks/warning_block.yml`:
 
-```text
-/asset model give myserver:ui/button
-/asset display spawn myserver:ui/button
-/asset block give decorations.crystal
+```yaml
+render: block
+model: myserver:block/warning_block
 ```
 
-The model command gives a visual item. The block command gives a tagged placeable item: right-click a block face to place it in adjacent empty space. Managed blocks use a vanilla collision carrier plus an item display and break instantly. Their YAML definitions configure sounds, particles and drops.
+AssetChannel generates the item definition, atlas entries and stable native state assignment. Use `render: display` for display-backed models. See [block setup](WORLD-ASSETS.md#block-definitions) for particles and optional settings. Rebuild with `/asset texturepack generate`, accept the refreshed pack, then:
+
+```text
+/asset model give myserver:block/warning_block
+/asset display spawn myserver:block/warning_block
+/asset block give warning_block
+```
+
+The model command gives a visual item. The block command gives a tagged placeable item: right-click a block face to place it in adjacent empty space. Managed blocks break instantly. For blinking over existing blocks without changing the world, see [warning overlays](WORLD-ASSETS.md#native-blocks-and-warning-overlays).
 
 ### HUD templates
 
@@ -131,7 +167,7 @@ height: 16
 ascent: 15
 ```
 
-`unicode` is optional. When omitted, AssetChannel deterministically assigns an available character from the Unicode private-use range `U+E000`–`U+F8FF`. Existing explicit values remain supported and are reserved before automatic assignment.
+`unicode` is optional. When omitted, AssetChannel deterministically assigns an available character from the Unicode private-use range `U+E000`â€“`U+F8FF`. Existing explicit values remain supported and are reserved before automatic assignment.
 
 ```yaml
 height: 16
@@ -149,7 +185,7 @@ String direct = assets.iconUnicode("ui.banner").orElseThrow();
 
 ### Standalone sounds
 
-Put MP3 or OGG Vorbis files anywhere under `sound/`. AssetChannel generates:
+Put MP3 or OGG Vorbis files under `packs/main/sources/sounds/`. AssetChannel generates:
 
 - A channel-preserving variant for listener-relative playback
 - A mono variant for fixed locations, entities, and spatial broadcasts
@@ -226,7 +262,7 @@ Auto-splitting accepts exactly one source file. Use a single assembled source wh
 A staged soundtrack puts no MP3 or OGG files at its root. Its root configuration selects a default stage:
 
 ```text
-music/boss/
+packs/main/sources/music/boss/
 |-- config.yml
 `-- stages/
     |-- phase-1/
@@ -237,7 +273,7 @@ music/boss/
         `-- intense.ogg
 ```
 
-Root `music/boss/config.yml`:
+Root `packs/main/sources/music/boss/config.yml`:
 
 ```yaml
 default-stage: phase-1
@@ -281,7 +317,7 @@ overrides:
 
 `handoff-lead-milliseconds` accepts `0` through `250`; zero disables early handoff. A stage-level value overrides the global value. Vorbis quality accepts `0` through `10`.
 
-Converted audio is cached under `plugins/AssetChannel/cache/audio/`. Cache keys include the complete source content and encoding settings, so changed inputs are rebuilt while unchanged inputs are reused. Unsplit listener OGG files bypass the conversion cache because they are copied unchanged.
+Converted audio is cached under `plugins/AssetChannel/generated/cache/audio/`. Cache keys include the complete source content and encoding settings, so changed inputs are rebuilt while unchanged inputs are reused. Unsplit listener OGG files bypass the conversion cache because they are copied unchanged.
 
 ## Java API
 
@@ -396,6 +432,9 @@ Commands require `assetchannel.command.test`, granted to operators by default.
 /asset block list
 /asset block give <block-id>
 /asset block remove
+/asset block overlay <block-id>
+/asset block blink <block-id> [interval-ticks] [duration-ticks]
+/asset block clear
 /asset resource list
 /asset icon test <id>
 /asset icon info <id>
@@ -443,7 +482,7 @@ Player placement with a tagged block item uses the separate `assetchannel.blocks
 - A second build cannot start while another is running.
 - Assets are generated in unique staging directories.
 - Every source, cached file, and newly generated OGG must contain readable audio with a positive duration.
-- `pack.zip` is replaced atomically after the complete build succeeds.
+- `generated/pack.zip` is replaced atomically after the complete build succeeds.
 - A failed build leaves the previous pack and active playback untouched.
 - Resource-pack readiness events are accepted only for AssetChannel's pack UUID.
 - All music sessions share one tick scheduler, and stop operations target only recently active clips.

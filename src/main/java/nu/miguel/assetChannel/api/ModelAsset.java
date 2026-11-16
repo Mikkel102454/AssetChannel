@@ -7,10 +7,13 @@ import org.bukkit.inventory.ItemStack;
 import java.util.Objects;
 
 /** An imported item definition. Geometry and textures are resolved by the client. */
-public record ModelAsset(String id, Key key) {
+public record ModelAsset(String id, Key key, boolean internal) {
+    /** Preserves the original public-model constructor for consumers. */
+    public ModelAsset(String id, Key key) { this(id, key, false); }
     public ModelAsset {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(key, "key");
+        internal = internal || (key.namespace().equals("assetchannel") && key.value().startsWith("generated/blocks/"));
     }
     /** Call on the server thread. The receiving player must have the current pack. */
     public ItemStack createItem(Material material) {

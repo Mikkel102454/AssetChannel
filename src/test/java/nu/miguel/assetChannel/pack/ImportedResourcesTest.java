@@ -51,6 +51,31 @@ class ImportedResourcesTest {
         put("demo/models/button.json", "{\"textures\":{\"layer0\":\"demo:missing\"}}");
         assertThrows(IllegalArgumentException.class, () -> ImportedResources.scan(root));
     }
+    @Test void acceptsParticleSpritesExtractedFromAnAtlasSheet() throws Exception {
+        put("demo/textures/sheet.png", "source texture");
+        put("minecraft/atlases/items.json", """
+                {"sources":[{"type":"minecraft:unstitch","resource":"demo:sheet",
+                  "divisor_x":16,"divisor_y":16,
+                  "regions":[{"sprite":"demo:warning_particle","x":4.625,"y":6.125,"width":2,"height":2}]}]}
+                """);
+        put("demo/models/warning.json", "{\"textures\":{\"particle\":\"demo:warning_particle\"}}");
+        assertDoesNotThrow(() -> ImportedResources.scan(root));
+    }
+    @Test void acceptsRenamedAtlasSpritesWithoutTreatingThemAsPngFiles() throws Exception {
+        put("demo/textures/sheet.png", "source texture");
+        put("minecraft/atlases/items.json", "{\"sources\":[{\"type\":\"minecraft:single\",\"resource\":\"demo:sheet\",\"sprite\":\"demo:alias\"}]}");
+        put("demo/models/button.json", "{\"textures\":{\"layer0\":{\"sprite\":\"demo:alias\"}}}");
+        assertDoesNotThrow(() -> ImportedResources.scan(root));
+    }
+    @Test void rejectsMissingSourceImageForExtractedAtlasSprites() throws Exception {
+        put("minecraft/atlases/items.json", """
+                {"sources":[{"type":"minecraft:unstitch","resource":"demo:missing",
+                  "divisor_x":16,"divisor_y":16,
+                  "regions":[{"sprite":"demo:warning_particle","x":0,"y":0,"width":2,"height":2}]}]}
+                """);
+        var error = assertThrows(IllegalArgumentException.class, () -> ImportedResources.scan(root));
+        assertTrue(error.getMessage().contains("demo/textures/missing.png"));
+    }
     @Test void rejectsMissingBitmapFontTexture() throws Exception {
         put("demo/font/panel.json", "{\"providers\":[{\"type\":\"bitmap\",\"file\":\"demo:missing.png\",\"chars\":[\"A\"]}]}");
         assertThrows(IllegalArgumentException.class, () -> ImportedResources.scan(root));

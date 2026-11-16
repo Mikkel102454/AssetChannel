@@ -21,15 +21,28 @@ public class PackDeveloper {
         List<Asset> assets = new ArrayList<>();
 
         try {
-            scanIcons(assets);
-            scanSounds(assets);
-            scanFonts(assets);
-            scanMusic(assets);
-            scanHuds(assets);
-            for(AssetFile file:scanFiles(PathResolver.getDataPath().toPath().resolve("blocks"),Set.of("yml","yaml")))
-                assets.add(BlockDefinition.load(file.id(),file.path()));
-            var extras=PackExtras.scan(PathResolver.getDataPath().toPath().resolve("imports/pack"),PathResolver.getDataPath().toPath().resolve("imports/assets"));
-            assets.add(extras.resources());assets.add(extras);
+            List<Path> packs = PathResolver.contentPacks();
+            java.util.Map<String, Path> owners = new java.util.HashMap<>();
+            for (Path pack : packs) {
+                List<Asset> content = new ArrayList<>();
+                scanIcons(content, pack.resolve("sources/icons"));
+                scanSounds(content, pack.resolve("sources/sounds"));
+                scanFonts(content, pack.resolve("sources/fonts"));
+                scanMusic(content, pack.resolve("sources/music"));
+                scanHuds(content, pack.resolve("definitions/hud"));
+                for (AssetFile file : scanFiles(pack.resolve("definitions/blocks"), Set.of("yml", "yaml")))
+                    content.add(BlockDefinition.load(file.id(), file.path()));
+                for (Asset asset : content) {
+                    String key = asset.getClass().getName() + ":" + asset.getId();
+                    Path previous = owners.putIfAbsent(key, pack);
+                    if (previous != null) throw new IllegalArgumentException("Duplicate asset id '" + asset.getId()
+                            + "' in " + previous + " and " + pack);
+                    assets.add(asset);
+                }
+            }
+            var extras = PackExtras.scanPacks(packs, resources -> AutomaticBlockContent.prepare(resources, assets, PathResolver.getDataPath().toPath()));
+            assets.add(extras.resources());
+            assets.add(extras);
 
         } catch (IOException e) {
             throw new RuntimeException("Failed to scan asset folders", e);
@@ -41,9 +54,7 @@ public class PackDeveloper {
         return List.copyOf(assets);
     }
 
-    private static void scanIcons(List<Asset> assets) throws IOException {
-        Path root = PathResolver.getIconPath().toPath();
-
+    private static void scanIcons(List<Asset> assets, Path root) throws IOException {
         for (AssetFile file : scanFiles(root, Set.of("png"))) {
             Path configPath = getConfigPath(file.path());
 
@@ -52,9 +63,7 @@ public class PackDeveloper {
         }
     }
 
-    private static void scanSounds(List<Asset> assets) throws IOException {
-        Path root = PathResolver.getSoundPath().toPath();
-
+    private static void scanSounds(List<Asset> assets, Path root) throws IOException {
         for (AssetFile file : scanSoundFiles(root)) {
 
             Sound sound = new Sound(file.id(), file.path());
@@ -66,9 +75,7 @@ public class PackDeveloper {
         return scanFiles(root, Set.of("ogg", "mp3"));
     }
 
-    private static void scanFonts(List<Asset> assets) throws IOException {
-        Path root = PathResolver.getFontPath().toPath();
-
+    private static void scanFonts(List<Asset> assets, Path root) throws IOException {
         for (AssetFile file : scanFiles(root, Set.of("ttf", "otf"))) {
 
             Font font = new Font(file.id(), file.path());
@@ -77,6 +84,7 @@ public class PackDeveloper {
     }
 
     static void validateAssets(List<Asset> assets) {
+        NativeBlockStates.validate(assets);
         Set<String> itemModels=assets.stream().filter(ImportedResources.class::isInstance).map(ImportedResources.class::cast)
                 .flatMap(imported->imported.models().stream()).map(nu.miguel.assetChannel.api.ModelAsset::id).collect(java.util.stream.Collectors.toSet());
         for(Asset asset:assets)if(asset instanceof BlockDefinition block) {
@@ -162,17 +170,17 @@ public class PackDeveloper {
         }
     }
 
-    private static void scanHuds(List<Asset> assets) throws IOException {
-        Path root = PathResolver.getHudPath().toPath();
+    private static void scanHuds(List<Asset> assets, Path root) throws IOException {
         for (AssetFile file : scanFiles(root, Set.of("yml", "yaml"))) assets.add(Hud.load(file.id(), file.path()));
     }
 
-    private static void scanMusic(List<Asset> assets) throws IOException {
-        Path root = PathResolver.getMusicPath().toPath();
+    private static void scanMusic(List<Asset> assets, Path root) throws IOException {
         if (!Files.exists(root)) return;
 
         try (Stream<Path> folders = Files.list(root)) {
-            for (Path folder : folders.filter(Files::isDirectory).toList()) {
+            for (Path folder : folders.sorted().toList()) {
+                if (Files.isSymbolicLink(folder)) throw new IllegalArgumentException("Source symlinks are unsupported: " + folder);
+                if (!Files.isDirectory(folder)) continue;
                 String id = root.relativize(folder).toString().replace('\\', '/').toLowerCase(Locale.ROOT).replace('/', '.');
                 assets.add(Music.load(id, folder));
             }
@@ -186,7 +194,8 @@ public class PackDeveloper {
         }
 
         try (Stream<Path> files = Files.walk(root)) {
-            return files
+            return files.sorted()
+                    .peek(path -> { if (Files.isSymbolicLink(path)) throw new IllegalArgumentException("Source symlinks are unsupported: " + path); })
                     .filter(Files::isRegularFile)
                     .filter(path -> hasExtension(path, extensions))
                     .map(path -> new AssetFile(

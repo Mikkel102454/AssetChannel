@@ -21,7 +21,7 @@ class PackImportIntegrationTest {
             javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(1,1,java.awt.image.BufferedImage.TYPE_INT_ARGB),"png",root.resolve("pack.png").toFile());
             var extras=nu.miguel.assetChannel.pack.PackExtras.scan(root,directory.resolve("loose"));
             assertTrue(PackBuilder.build(List.of(extras.resources(),extras)));
-            try(var zip=new ZipFile(directory.resolve("pack.zip").toFile())) {
+            try(var zip=new ZipFile(directory.resolve("generated/pack.zip").toFile())) {
                 assertNotNull(zip.getEntry("pack.png"));
                 var meta=com.google.gson.JsonParser.parseString(new String(zip.getInputStream(zip.getEntry("pack.mcmeta")).readAllBytes(),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
                 assertTrue(meta.has("language"));assertEquals(97,meta.getAsJsonObject("pack").getAsJsonArray("min_format").get(0).getAsInt());
@@ -43,8 +43,8 @@ class PackImportIntegrationTest {
             Path fontFile = directory.resolve("hud.ttf"); Files.write(fontFile, new byte[]{1, 2, 3});
             var font = new nu.miguel.assetChannel.asset.Font("ui.hud", fontFile);
             assertTrue(PackBuilder.build(List.of(imported, icon, font)));
-            byte[] published = Files.readAllBytes(directory.resolve("pack.zip"));
-            try (var zip = new ZipFile(directory.resolve("pack.zip").toFile())) {
+            byte[] published = Files.readAllBytes(directory.resolve("generated/pack.zip"));
+            try (var zip = new ZipFile(directory.resolve("generated/pack.zip").toFile())) {
                 assertNotNull(zip.getEntry("assets/demo/items/cube.json"));
                 assertNotNull(zip.getEntry("assets/demo/models/ui/cube.json"));
                 assertNotNull(zip.getEntry("assets/demo/textures/ui/cube.png"));
@@ -59,7 +59,7 @@ class PackImportIntegrationTest {
             Files.createDirectories(conflict.getParent()); Files.writeString(conflict, "{\"providers\":[]}");
             var bad = ImportedResources.scan(directory.resolve("conflict"));
             assertThrows(IllegalArgumentException.class, () -> PackBuilder.build(List.of(bad)));
-            assertArrayEquals(published, Files.readAllBytes(directory.resolve("pack.zip")));
+            assertArrayEquals(published, Files.readAllBytes(directory.resolve("generated/pack.zip")));
         } finally { PathResolver.dataPath = oldPath; PathResolver.hasBeenEnsured = oldEnsured; }
     }
 }

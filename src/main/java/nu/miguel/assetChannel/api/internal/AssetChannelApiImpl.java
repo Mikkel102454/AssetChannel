@@ -17,7 +17,10 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     private List<ResourceAsset> nativeResources = List.of();
     private final WorldAssetManager worldAssets = new WorldAssetManager(this);
     public WorldAssetManager worldAssets() { return worldAssets; }
+    private final BlockOverlayManager blockOverlays = new BlockOverlayManager(this);
+    public BlockOverlayManager blockOverlayManager() { return blockOverlays; }
     private Map<String, ModelAsset> itemModels = Map.of();
+    private List<ModelAsset> publicItemModels = List.of();
     private Map<String, IconAsset> icons = Map.of();
     private Map<String, FontAsset> fonts = Map.of();
     private Map<String, SoundAsset> sounds = Map.of();
@@ -32,6 +35,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
 
     public void loadAssets(List<Asset> assets) {
         requireMainThread();
+        blockOverlays.clearAll();
         Map<String, IconAsset> newIcons = new TreeMap<>();
         Map<String, ModelAsset> newItemModels = new TreeMap<>();
         Map<String, BlockAsset> newBlocks = new TreeMap<>();
@@ -67,6 +71,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
         }
         icons = Collections.unmodifiableMap(newIcons);
         itemModels = Collections.unmodifiableMap(newItemModels);
+        publicItemModels = newItemModels.values().stream().filter(model -> !model.internal()).toList();
         blockAssets = Collections.unmodifiableMap(newBlocks);
         nativeResources = List.copyOf(newResources);
         fonts = Collections.unmodifiableMap(newFonts);
@@ -79,6 +84,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
 
     public void setPackReady(Player player, boolean ready) {
         requireMainThread();
+        if (!ready) blockOverlays.clear(player, true);
         if (ready) packReady.add(player.getUniqueId()); else packReady.remove(player.getUniqueId());
         hudManager.packReadyChanged(player.getUniqueId(), ready);
         worldAssets.playerReadiness(player,ready);
@@ -87,6 +93,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
 
     public void onQuit(Player player) {
         requireMainThread();
+        blockOverlays.clear(player, false);
         packReady.remove(player.getUniqueId());
         Set<MusicSessionImpl> playerMusic = playerSessions.get(player.getUniqueId());
         if (playerMusic != null)
@@ -96,6 +103,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
 
     public void stopSessions() {
         requireMainThread();
+        blockOverlays.clearAll();
         for (MusicSessionImpl session : List.copyOf(sessions.values())) session.stop();
         hudManager.clear();
     }
@@ -145,6 +153,9 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
     @Override public Optional<PlacedAssetBlock> placedBlock(Location at){return worldAssets.placedBlock(at);}
     @Override public boolean removeBlock(Location at,boolean effects){return worldAssets.removeBlock(at,effects);}
     @Override public org.bukkit.inventory.ItemStack createBlockItem(String id){return worldAssets.createBlockItem(id);}
+    @Override public BlockOverlay showBlockOverlay(Player player, Location at, String id) { return blockOverlays.show(player, at, id); }
+    @Override public Optional<BlockOverlay> blockOverlay(UUID id) { return blockOverlays.get(id); }
+    @Override public Collection<BlockOverlay> blockOverlays(Player player) { return blockOverlays.all(player); }
     @Override public <T> void spawnParticle(Location at,org.bukkit.Particle particle,int count,T data){worldAssets.spawnParticle(at,particle,count,data);}
     @Override public void showBlockDamage(Location at,float progress,int sourceId){worldAssets.showBlockDamage(at,progress,sourceId);}
     @Override public PlaybackResult playResourceSound(Player player,String key,SoundOrigin origin,SoundCategory category,float volume,float pitch) {
@@ -152,7 +163,7 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
         if(!Float.isFinite(volume)||volume<0||!Float.isFinite(pitch)||pitch<=0)throw new IllegalArgumentException("Invalid sound volume/pitch");
         return playKey(player,Key.key(key).asString(),category,origin,volume,pitch);
     }
-    @Override public Collection<ModelAsset> models() { return itemModels.values(); }
+    @Override public Collection<ModelAsset> models() { return publicItemModels; }
     @Override public Optional<ModelAsset> model(String id) { return Optional.ofNullable(itemModels.get(normalize(id))); }
     @Override public Collection<FontAsset> fonts() { return fonts.values(); }
     @Override public Collection<SoundAsset> sounds() { return sounds.values(); }

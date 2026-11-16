@@ -66,7 +66,7 @@ public class CommandListener {
                                 .executes(c -> {
                                     if (!(c.getSource().getSender() instanceof Player player)) return playerOnly(c);
                                     if (!Main.getInternalApi().isPackReady(player.getUniqueId())) { player.sendRichMessage("<yellow>Current pack is not ready."); return 0; }
-                                    var model = Main.getAssetApi().model(StringArgumentType.getString(c, "id"));
+                                    var model = Main.getAssetApi().model(StringArgumentType.getString(c, "id")).filter(value -> !value.internal());
                                     if (model.isEmpty()) { player.sendRichMessage("<red>Unknown model."); return 0; }
                                     if (player.getInventory().firstEmpty() < 0) { player.sendRichMessage("<yellow>Make room in your inventory."); return 0; }
                                     player.getInventory().addItem(model.get().createItem(org.bukkit.Material.PAPER)); return 1;
@@ -85,21 +85,33 @@ public class CommandListener {
                             try {
                                 var location=player.getLocation().add(player.getLocation().getDirection().multiply(2)).add(0,1,0);
                                 location.setPitch(0);
-                                var display=Main.getAssetApi().spawnItemDisplay(location,StringArgumentType.getString(c,"id"),DisplayOptions.defaults());
+                                String id = StringArgumentType.getString(c,"id");
+                                if (Main.getAssetApi().model(id).filter(value -> !value.internal()).isEmpty()) throw new IllegalArgumentException("Unknown model: " + id);
+                                var display=Main.getAssetApi().spawnItemDisplay(location,id,DisplayOptions.defaults());
                                 player.sendMessage(Component.text("Spawned display "+display.getUniqueId()));return 1;
                             }catch(IllegalArgumentException|IllegalStateException error){player.sendMessage(Component.text(error.getMessage()));return 0;}
                         })))
                 .then(Commands.literal("remove").then(Commands.argument("uuid",ArgumentTypes.uuid())
+                        .suggests((c,b) -> suggest(b, Main.getInternalApi().worldAssets().removableDisplays().stream().map(display -> display.getUniqueId().toString()).sorted().toList()))
                         .executes(c->{
                             try{return Main.getAssetApi().removeDisplay(c.getArgument("uuid",UUID.class))?1:0;}
                             catch(IllegalArgumentException error){c.getSource().getSender().sendMessage(Component.text(error.getMessage()));return 0;}
                         })))
                 .then(Commands.literal("list").executes(c->{
-                    var displays=Main.getAssetApi().displays();displays.forEach(display->c.getSource().getSender().sendMessage(Component.text(display.getUniqueId()+" "+display.getType())));return displays.size();
+                    var displays=Main.getInternalApi().worldAssets().removableDisplays();displays.forEach(display->c.getSource().getSender().sendMessage(Component.text(display.getUniqueId()+" "+display.getType())));return displays.size();
                 }));
     }
     private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> blockCommands() {
         return Commands.literal("block")
+                .then(blockOverlayCommand(false))
+                .then(blockOverlayCommand(true))
+                .then(Commands.literal("clear").executes(c -> {
+                    if (!(c.getSource().getSender() instanceof Player player)) return playerOnly(c);
+                    var overlays = List.copyOf(Main.getAssetApi().blockOverlays(player));
+                    overlays.forEach(BlockOverlay::close);
+                    player.sendMessage(Component.text("Cleared " + overlays.size() + " block overlays."));
+                    return overlays.size();
+                }))
                 .then(Commands.literal("list").executes(c->{Main.getAssetApi().blocks().forEach(block->c.getSource().getSender().sendMessage(Component.text(block.id()+" -> "+block.model())));return Main.getAssetApi().blocks().size();}))
                 .then(Commands.literal("give").then(Commands.argument("id",modelIdArgument())
                         .suggests((c,b)->suggest(b,Main.getAssetApi().blocks().stream().map(BlockAsset::id).toList()))
@@ -116,6 +128,32 @@ public class CommandListener {
                     if(target==null)return 0;
                     return Main.getAssetApi().removeBlock(target.getLocation(),false)?1:0;
                 }));
+    }
+
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> blockOverlayCommand(boolean blink) {
+        var id = Commands.argument("id", StringArgumentType.word())
+                .suggests((c, b) -> suggest(b, Main.getAssetApi().blocks().stream().filter(block -> block.blockState() != null).map(BlockAsset::id).toList()))
+                .executes(c -> showBlockOverlay(c, blink, 5, 200));
+        if (blink) id.then(Commands.argument("interval", IntegerArgumentType.integer(2, 200))
+                .executes(c -> showBlockOverlay(c, true, IntegerArgumentType.getInteger(c, "interval"), 200))
+                .then(Commands.argument("duration", IntegerArgumentType.integer(2, 1200))
+                        .executes(c -> showBlockOverlay(c, true, IntegerArgumentType.getInteger(c, "interval"), IntegerArgumentType.getInteger(c, "duration")))));
+        return Commands.literal(blink ? "blink" : "overlay").then(id);
+    }
+
+    private int showBlockOverlay(com.mojang.brigadier.context.CommandContext<CommandSourceStack> context, boolean blink, int interval, int duration) {
+        if (!(context.getSource().getSender() instanceof Player player)) return playerOnly(context);
+        var target = player.getTargetBlockExact(6);
+        if (target == null) { player.sendMessage(Component.text("Look at a full block within six blocks.")); return 0; }
+        try {
+            String id = StringArgumentType.getString(context, "id");
+            if (blink) Main.getInternalApi().blockOverlayManager().previewBlink(player, target.getLocation(), id, interval, duration);
+            else Main.getAssetApi().showBlockOverlay(player, target.getLocation(), id);
+            player.sendMessage(Component.text(blink ? "Blinking " + id + " for " + duration + " ticks." : "Showing " + id + "; /asset block clear restores the real block."));
+            return 1;
+        } catch (IllegalArgumentException | IllegalStateException error) {
+            player.sendMessage(Component.text(error.getMessage())); return 0;
+        }
     }
 
     private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> iconCommands() {

@@ -6,7 +6,7 @@ Related guides: [installation and configuration](README.md), [asset imports](ASS
 
 ## Compile and load
 
-Build AssetChannel with `./gradlew build`. Copy `build/libs/AssetChannel-1.0-SNAPSHOT-plain.jar` into your consumer project's `libs/` folder and compile against it. The plain JAR is a compile-time dependency; install the **unclassified shaded JAR** on the server. No published Maven coordinate is assumed here.
+Build AssetChannel with `./gradlew build`. Copy `build/libs/AssetChannel-1.0.0-plain.jar` into your consumer project's `libs/` folder and compile against it. The plain JAR is a compile-time dependency; install the **unclassified shaded JAR** on the server.
 
 In your consumer's `build.gradle.kts`:
 
@@ -17,7 +17,7 @@ repositories {
 }
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.3.build.242-stable")
-    compileOnly(files("libs/AssetChannel-1.0-SNAPSHOT-plain.jar"))
+    compileOnly(files("libs/AssetChannel-1.0.0-plain.jar"))
 }
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
@@ -67,16 +67,19 @@ The examples below are handler snippets: `assets` is this service, and the refer
 
 ## IDs and discovery
 
+Source paths below are relative to `plugins/AssetChannel/packs/main/`. Pack folder names do not become part of asset IDs. The Java API and Minecraft resource keys are unchanged by the folder layout.
+
 | Asset | Example lookup ID | Source |
 |---|---|---|
-| Generated icon | `ui.rank` | `icons/ui/rank.png` plus `rank.yml` |
-| Generated font | `ui.title` | `font/ui/title.ttf` |
-| Generated sound | `npc.talk` | `sound/npc/talk.ogg` |
-| Soundtrack | `lobby` | `music/lobby/config.yml` and audio |
-| HUD template | `notification.banner` | `hud/notification/banner.yml` |
-| Block definition | `decorations.crystal` | `blocks/decorations/crystal.yml` |
-| Imported item model | `myserver:ui/button` | `imports/assets/myserver/items/ui/button.json` |
-| Imported font | `myserver:ui/panel` | `imports/assets/myserver/font/ui/panel.json` |
+| Generated icon | `ui.rank` | `sources/icons/ui/rank.png` plus `rank.yml` |
+| Generated font | `ui.title` | `sources/fonts/ui/title.ttf` |
+| Generated sound | `npc.talk` | `sources/sounds/npc/talk.ogg` |
+| Soundtrack | `lobby` | `sources/music/lobby/config.yml` and audio |
+| HUD template | `notification.banner` | `definitions/hud/notification/banner.yml` |
+| Block definition | `decorations.crystal` | `definitions/blocks/decorations/crystal.yml` |
+| Imported item model | `myserver:ui/button` | `assets/myserver/items/ui/button.json` |
+| Simple block model | `myserver:block/warning_block` | `assets/myserver/models/block/warning_block.json` and its `render: block` definition |
+| Imported font | `myserver:ui/panel` | `assets/myserver/font/ui/panel.json` |
 | Native file descriptor | `myserver:models/ui/button.json` | the actual native file, including directory/extension |
 
 ```java
@@ -92,6 +95,8 @@ for (ResourceAsset resource : assets.resources(ResourceKind.TEXTURE)) {
 ```
 
 Collection and optional lookup pairs are `icons()/icon(id)`, `fonts()/font(id)`, `sounds()/sound(id)`, `soundtracks()/soundtrack(id)`, `huds()/hud(id)`, `models()/model(id)` and `blocks()/block(id)`. `iconUnicode(id)` returns an optional conventional Unicode label such as `U+E000`.
+
+`models()` lists public item models. Internal particle models are excluded; `model(id)` still resolves them for effects. `ModelAsset.internal()` identifies these helpers. Native item definitions can mark an internal helper with `"assetchannel:internal": true`. Operator model-give/display-spawn commands reject internal models.
 
 `ResourceAsset` exposes `key()`, `kind()` and `bytes()` (the byte count, not file contents). `resources()` catalogs imported native files in the effective asset layers. It does not list `pack.mcmeta`, the pack icon, inactive overlays or generated audio/font/cache outputs. Kinds include `ITEM`, `MODEL`, `BLOCKSTATE`, `TEXTURE`, `ANIMATION_METADATA`, `FONT`, `SOUND`, `SOUND_DEFINITIONS`, `PARTICLE`, `EQUIPMENT`, `ATLAS`, `LANGUAGE`, `SHADER`, `POST_EFFECT`, `TEXT` and `OTHER`. The metadata kind currently groups `.mcmeta` files. Unknown native categories are retained as `OTHER`.
 
@@ -145,16 +150,18 @@ Initial item displays use the native `FIXED` item transform; set `setItemDisplay
 
 Keep the UUIDs your plugin creates. `removeDisplay()` returns false for a missing/unloaded/foreign entity and refuses a display belonging to a placed block; use `removeBlock()` for the latter. Do not remove every entry in `assets.displays()` when disabling your plugin, since other consumers may own some of those objects. Nonpersistent displays disappear on unload/shutdown; persistent displays intentionally remain until removed. Native display metadata/transforms persist with the entity.
 
+`/asset display list` and UUID completion for `/asset display remove` show loaded standalone AssetChannel displays. Managed block displays are excluded because their lifecycle belongs to `/asset block remove`.
+
 ## Managed blocks
 
 First configure a block definition and import its referenced item model; see [block definitions](WORLD-ASSETS.md#block-definitions).
 
 ```java
-ItemStack placeable = assets.createBlockItem("decorations.crystal");
+ItemStack placeable = assets.createBlockItem("warning_block");
 // Your plugin decides how to deliver the item. Player placement honors the block placement permission/events.
 
-PlacedAssetBlock placed = assets.placeBlock(emptyLocation, "decorations.crystal");
-UUID visualEntityId = placed.displayId();
+PlacedAssetBlock placed = assets.placeBlock(emptyLocation, "warning_block");
+UUID visualEntityId = placed.displayId(); // null for native-state blocks
 BlockAsset definitionSnapshot = placed.asset();
 
 assets.placedBlock(emptyLocation).ifPresent(existing ->
@@ -165,11 +172,35 @@ assets.removeBlock(emptyLocation, true); // presentation effects, no item drop
 
 `placeBlock()` requires an empty air block, valid world height, a loaded chunk and a registered definition/model. It restores the original block if display creation fails. `PlacedAssetBlock` contains `worldId()`, `x()`, `y()`, `z()`, `asset()`, `displayId()`, `originalData()` and `carrierData()`.
 
+`render: block` definitions resolve to a stable `BlockAsset.blockState()` and geometry `blockModel()` during pack compilation. Placement uses that native state and `displayId()` is null. `render: display` leaves both fields null. Generated particle wrappers can make `blockModel()` and `particleModel()` different from the source `model()` key; use the returned descriptor instead of constructing generated IDs yourself. Missing item definitions and atlas entries are compiled automatically. Assignments persist in `storage/block-states.json` and are not reused after definition removal. The original nine-argument `BlockAsset` constructor and explicit legacy fields remain supported. See [block configuration](WORLD-ASSETS.md#block-definitions).
+
 The player-item path fires `BlockPlaceEvent` and rolls back on cancellation or denied build without consuming the item. Cancelled block-break events are respected. A normal successful break drops the block item in non-creative mode when `drops` is enabled. API `placeBlock()`/`removeBlock()` are trusted plugin operations: implement your own authorization/protection checks before calling them. API removal never drops an item.
 
 Block records persist in chunk PDC; current placements keep their definition snapshots across asset reloads. Chunk reconciliation repairs missing visuals and removes orphan visuals, and removal does not restore over a carrier another system has changed. Keep the models used by persistent placements in the pack. Remove placements through AssetChannel before uninstalling, since their collision carriers and persistent displays survive shutdown. Directly removing the display entity bypasses block lifecycle bookkeeping.
 
 The current block implementation uses instant breaking and vanilla carrier collision. Model geometry does not generate new collision meshes or server block IDs.
+
+## Visual block overlays
+
+Use overlays for warning flashes over existing full blocks. They send per-player native block updates and never replace the actual server block or its inventory. The asset must use `render: block` (or explicit legacy native fields); the target must have a full-cube collision shape, be in the player's world and a loaded/sent chunk, and the player must have the current pack ready. All overlay calls run on the Paper server thread.
+
+```java
+BlockOverlay warning = assets.showBlockOverlay(player, target.getLocation(), "warning_block");
+
+// Call these phases from your game's shared timer:
+warning.setVisible(false); // show the real block's current state
+warning.setVisible(true);  // show or refresh the warning state
+warning.close();           // end the effect and restore the current real block
+
+assets.blockOverlay(warning.id()); // Optional<BlockOverlay>
+assets.blockOverlays(player);      // snapshot of this player's active overlays
+```
+
+`BlockOverlay` exposes `id()`, `playerId()`, `assetId()`, a defensive `location()`, `visible()`, `isClosed()`, `setVisible(boolean)` and idempotent `close()`. A new overlay at the same player/world/position replaces the previous handle without an intermediate real-block update. Closed handles cannot alter their replacements. Limits are 512 overlays per player and 8192 total.
+
+Normal server updates can overwrite a fake block; repeated `setVisible(true)` refreshes it. Sessions end on pack loss/reload, quit, world change, respawn, client/server chunk unload or shutdown. Closing reads the current real block and resends block-entity data when needed. Overlays do not suppress breaking/interactions with the real block; game plugins own those rules. Keep your own handles and close them when your effect/plugin ends. Use `isClosed()` before advancing an effect after lifecycle changes.
+
+For an in-game test, look at a full block and run `/asset block blink warning_block [interval-ticks] [duration-ticks]`. This operator preview uses one shared scheduler and restores the view automatically; production timing belongs to the consumer plugin.
 
 ## Particles, sounds and breaking overlays
 

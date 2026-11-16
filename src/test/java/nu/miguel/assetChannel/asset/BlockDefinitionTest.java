@@ -7,6 +7,36 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class BlockDefinitionTest {
     @TempDir Path root;
+    @Test void simpleRenderDefaultsToModelParticlesAndRejectsUnknownModesOrInvalidRegions() throws Exception {
+        Path file = root.resolve("simple.yml");
+        Files.writeString(file, "render: block\nmodel: demo:warning\n");
+        assertEquals("demo:warning", BlockDefinition.load("warning", file).descriptor().particleModel());
+        for (String invalid : new String[]{"render: invalid\nmodel: demo:warning\n",
+                "render: block\nmodel: demo:warning\nparticles: {texture: 'demo:sheet', region: [-1, 0, 16, 16]}\n",
+                "render: block\nmodel: demo:warning\nparticles: {texture: 'demo:sheet', region: [0, 0, 16]}\n"}) {
+            Files.writeString(file, invalid);
+            assertThrows(IllegalArgumentException.class, () -> BlockDefinition.load("warning", file));
+        }
+    }
+    @Test void loadsNativeBlockStateAndGeometryWithoutChangingTheItemModel() throws Exception {
+        Path file = root.resolve("native.yml");
+        Files.writeString(file, "model: demo:cube\nblock-state: minecraft:note_block[note=24,powered=false,instrument=pling]\nblock-model: demo:blocks/cube\n");
+        var block = BlockDefinition.load("warning_block", file).descriptor();
+        assertEquals("demo:cube", block.model());
+        assertEquals("minecraft:note_block[instrument=pling,note=24,powered=false]", block.getClass().getMethod("blockState").invoke(block));
+        assertEquals("demo:blocks/cube", block.getClass().getMethod("blockModel").invoke(block));
+    }
+    @Test void rejectsIncompleteOrInvalidNativeStateDefinitions() throws Exception {
+        Path file = root.resolve("native.yml");
+        for (String extra : new String[]{
+                "block-state: minecraft:note_block[instrument=pling,note=24,powered=false]\n",
+                "block-model: demo:cube\n",
+                "block-state: minecraft:note_block[instrument=pling,note=25,powered=false]\nblock-model: demo:cube\n",
+                "block-state: minecraft:note_block[instrument=invalid,note=1,powered=false]\nblock-model: demo:cube\n"}) {
+            Files.writeString(file, "model: demo:cube\n" + extra);
+            assertThrows(IllegalArgumentException.class, () -> BlockDefinition.load("warning_block", file), extra);
+        }
+    }
     @Test void loadsModelCarrierBreakSoundAndParticleAssets() throws Exception {
         Path file=root.resolve("block.yml");
         Files.writeString(file,"model: demo:cube\ncarrier: minecraft:barrier\nbreak-sound: demo:crack\nparticle-model: demo:shard\ndrops: true\n");

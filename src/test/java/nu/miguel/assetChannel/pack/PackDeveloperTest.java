@@ -22,12 +22,12 @@ class PackDeveloperTest {
         assertThrows(IllegalArgumentException.class, () -> PackDeveloper.validateAssets(List.of(hud)));
     }
     @Test void acceptsImportedFontInHud() throws Exception {
-        Path nativeFont = directory.resolve("imports/assetchannel/font/panel.json");
+        Path nativeFont = directory.resolve("packs/main/assets/assetchannel/font/panel.json");
         Files.createDirectories(nativeFont.getParent()); Files.writeString(nativeFont, "{\"providers\":[]}");
         Path yaml = directory.resolve("native.yml");
         Files.writeString(yaml, "surface: boss-bar\nlayout: {content: '<font:assetchannel:panel>test</font>'}\n");
         var hud = nu.miguel.assetChannel.asset.Hud.load("native", yaml);
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> PackDeveloper.validateAssets(List.of(hud, ImportedResources.scan(directory.resolve("imports")))));
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> PackDeveloper.validateAssets(List.of(hud, ImportedResources.scan(directory.resolve("packs/main/assets")))));
     }
     @TempDir Path directory;
 

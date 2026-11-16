@@ -75,6 +75,9 @@ public final class WorldAssetManager implements Listener {
         for(World world:Bukkit.getWorlds())for(Display display:world.getEntitiesByClass(Display.class))if(owned(display))result.add(display);
         return List.copyOf(result);
     }
+    public Collection<Display> removableDisplays() {
+        return displays().stream().filter(display -> !"placed".equals(display.getPersistentDataContainer().get(KIND, PersistentDataType.STRING))).toList();
+    }
     public void playerReadiness(Player player,boolean ready) {
         thread();for(Display display:player.getWorld().getEntitiesByClass(Display.class))if(owned(display)) {
             if(ready)player.showEntity(Main.plugin,display);else player.hideEntity(Main.plugin,display);
@@ -104,7 +107,7 @@ public final class WorldAssetManager implements Listener {
         thread();World world=world(at);Block block=world.getBlockAt(at.getBlockX(),at.getBlockY(),at.getBlockZ());
         if(block.getY()<world.getMinHeight()||block.getY()>=world.getMaxHeight())throw new IllegalArgumentException("Outside world height");
         BlockAsset asset=definition(id);model(asset.model());
-        BlockData carrier=Bukkit.createBlockData(asset.carrier());
+        BlockData carrier=Bukkit.createBlockData(asset.blockState() != null ? asset.blockState() : asset.carrier());
         Bukkit.createBlockData(asset.particleBlock()); // Validate before any world mutation.
         if(air(carrier.getMaterial()))throw new IllegalArgumentException("Carrier must be a non-air block");
         Map<String,PlacedAssetBlock> records=read(block.getChunk());
@@ -112,11 +115,13 @@ public final class WorldAssetManager implements Listener {
         String original=block.getBlockData().getAsString(); ItemDisplay display=null;PlacedAssetBlock placed;
         try {
             block.setBlockData(carrier,false);
-            display=spawnItemDisplay(block.getLocation().add(0.5,0.5,0.5),asset.model(),DisplayOptions.defaults());
-            display.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
-            display.getPersistentDataContainer().set(KIND,PersistentDataType.STRING,"placed");
-            display.getPersistentDataContainer().set(ANCHOR,PersistentDataType.STRING,key(block));
-            placed=new PlacedAssetBlock(world.getUID(),block.getX(),block.getY(),block.getZ(),asset,display.getUniqueId(),original,carrier.getAsString());
+            if (asset.blockState() == null) {
+                display=spawnItemDisplay(block.getLocation().add(0.5,0.5,0.5),asset.model(),DisplayOptions.defaults());
+                display.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
+                display.getPersistentDataContainer().set(KIND,PersistentDataType.STRING,"placed");
+                display.getPersistentDataContainer().set(ANCHOR,PersistentDataType.STRING,key(block));
+            }
+            placed=new PlacedAssetBlock(world.getUID(),block.getX(),block.getY(),block.getZ(),asset,display == null ? null : display.getUniqueId(),original,carrier.getAsString());
             records.put(key(block),placed);save(block.getChunk(),records);
         } catch(RuntimeException error) {
             if(display!=null)display.remove();block.setBlockData(Bukkit.createBlockData(original),false);throw error;
@@ -131,7 +136,7 @@ public final class WorldAssetManager implements Listener {
         boolean unchanged=block.getBlockData().getAsString().equals(placed.carrierData());
         BlockData original=unchanged?Bukkit.createBlockData(placed.originalData()):null;
         records.remove(key(block));save(block.getChunk(),records);
-        Entity display=Bukkit.getEntity(placed.displayId());if(owned(display))display.remove();
+        Entity display=placed.displayId() == null ? null : Bukkit.getEntity(placed.displayId());if(owned(display))display.remove();
         if(unchanged)block.setBlockData(original,false);
         if(effects)breakEffects(block.getLocation().add(0.5,0.5,0.5),placed.asset());return true;
     }
@@ -180,11 +185,15 @@ public final class WorldAssetManager implements Listener {
             event.getBlock().getWorld().dropItemNaturally(event.getBlock().getLocation().add(0.5,0.5,0.5),blockItem(placed.get().asset()));
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void interact(PlayerInteractEvent event) {
-        if(event.getAction()!=Action.RIGHT_CLICK_BLOCK||event.getClickedBlock()==null||event.getHand()==null||event.getItem()==null)return;
+        if(event.getAction()!=Action.RIGHT_CLICK_BLOCK||event.getClickedBlock()==null||event.getHand()==null)return;
+        boolean nativeBlock = event.getClickedBlock().getType() == Material.NOTE_BLOCK
+                && placedBlock(event.getClickedBlock().getLocation()).map(p -> p.asset().blockState() != null).orElse(false);
+        if (nativeBlock) event.setCancelled(true);
+        if(event.getItem()==null)return;
         if(event.getPlayer().getGameMode()==GameMode.ADVENTURE||event.getPlayer().getGameMode()==GameMode.SPECTATOR)return;
         var meta=event.getItem().getItemMeta();if(meta==null)return;
         String id=meta.getPersistentDataContainer().get(BLOCK_ITEM,PersistentDataType.STRING);if(id==null)return;
-        if(event.getClickedBlock().getType().isInteractable()&&!event.getPlayer().isSneaking())return;
+        if(!nativeBlock&&event.getClickedBlock().getType().isInteractable()&&!event.getPlayer().isSneaking())return;
         event.setCancelled(true);Block target=event.getClickedBlock().getRelative(event.getBlockFace());
         if(!target.getWorld().getWorldBorder().isInside(target.getLocation())||!event.getPlayer().hasPermission("assetchannel.blocks.place"))return;
         var previous=target.getState();
@@ -201,10 +210,39 @@ public final class WorldAssetManager implements Listener {
         } catch(IllegalArgumentException|IllegalStateException error){event.getPlayer().sendMessage(net.kyori.adventure.text.Component.text(error.getMessage()));}
     }
     private boolean managed(Block block){return placedBlock(block.getLocation()).isPresent();}
+    private boolean restoreNativeState(Block block, PlacedAssetBlock placed) {
+        if (placed.asset().blockState() == null
+                || !(block.getBlockData() instanceof org.bukkit.block.data.type.NoteBlock current)) return false;
+        var reserved = (org.bukkit.block.data.type.NoteBlock) Bukkit.createBlockData(placed.carrierData());
+        // Neighbor updates change instrument/power, never the note. A different note or material is an external replacement.
+        if (!current.getNote().equals(reserved.getNote())) return false;
+        block.setBlockData(reserved, false);
+        return true;
+    }
+    @EventHandler(ignoreCancelled=true) public void notePlayed(NotePlayEvent event) {
+        if (placedBlock(event.getBlock().getLocation()).map(p -> p.asset().blockState() != null).orElse(false)) event.setCancelled(true);
+    }
+    @EventHandler public void redstone(BlockRedstoneEvent event) {
+        if (placedBlock(event.getBlock().getLocation()).map(p -> p.asset().blockState() != null).orElse(false)) event.setNewCurrent(event.getOldCurrent());
+    }
     @EventHandler(ignoreCancelled=true) public void piston(BlockPistonExtendEvent event){if(event.getBlocks().stream().anyMatch(this::managed)||event.getBlocks().stream().anyMatch(b->managed(b.getRelative(event.getDirection()))))event.setCancelled(true);}
     @EventHandler(ignoreCancelled=true) public void retract(BlockPistonRetractEvent event){if(event.getBlocks().stream().anyMatch(this::managed))event.setCancelled(true);}
     @EventHandler(ignoreCancelled=true) public void flow(BlockFromToEvent event){if(managed(event.getToBlock()))event.setCancelled(true);}
-    @EventHandler(ignoreCancelled=true) public void physics(BlockPhysicsEvent event){if(managed(event.getBlock()))event.setCancelled(true);}
+    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void physics(BlockPhysicsEvent event) {
+        Block block = event.getBlock();
+        Map<String, PlacedAssetBlock> records = read(block.getChunk());
+        PlacedAssetBlock placed = records.get(key(block));
+        if (placed != null) {
+            event.setCancelled(true);
+            if (!block.getBlockData().getAsString().equals(placed.carrierData())) restoreNativeState(block, placed);
+        }
+        // Vertical shape updates run outside the cancellable neighbor event. Repair after that update chain.
+        // Nearby sand/support updates share the bounded chunk queue without cancelling their physics.
+        for (int dy = -1; dy <= 1; dy++) {
+            PlacedAssetBlock nearby = records.get(block.getX() + "," + (block.getY() + dy) + "," + block.getZ());
+            if (nearby != null && nearby.asset().blockState() != null) { enqueue(block.getChunk()); break; }
+        }
+    }
     @EventHandler(ignoreCancelled=true) public void burn(BlockBurnEvent event){if(managed(event.getBlock()))event.setCancelled(true);}
     @EventHandler(ignoreCancelled=true) public void explode(BlockExplodeEvent event){event.blockList().removeIf(this::managed);}
     @EventHandler(ignoreCancelled=true) public void explode(EntityExplodeEvent event){event.blockList().removeIf(this::managed);}
@@ -234,9 +272,10 @@ public final class WorldAssetManager implements Listener {
         Map<String,PlacedAssetBlock> records=read(chunk);boolean changed=false;
         for(var entry:List.copyOf(records.entrySet())) {
             PlacedAssetBlock placed=entry.getValue();Block block=chunk.getWorld().getBlockAt(placed.x(),placed.y(),placed.z());
-            if(!block.getBlockData().getAsString().equals(placed.carrierData())) {
-                Entity old=Bukkit.getEntity(placed.displayId());if(owned(old))old.remove();records.remove(entry.getKey());changed=true;continue;
+            if(!block.getBlockData().getAsString().equals(placed.carrierData()) && !restoreNativeState(block, placed)) {
+                Entity old=placed.displayId() == null ? null : Bukkit.getEntity(placed.displayId());if(owned(old))old.remove();records.remove(entry.getKey());changed=true;continue;
             }
+            if (placed.asset().blockState() != null) continue;
             if(Bukkit.getEntity(placed.displayId())==null)try {
                 ItemDisplay display=spawnItemDisplay(block.getLocation().add(0.5,0.5,0.5),placed.asset().model(),DisplayOptions.defaults());
                 display.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
@@ -248,7 +287,7 @@ public final class WorldAssetManager implements Listener {
         if(changed)save(chunk,records);
         for(Entity entity:chunk.getEntities())if(owned(entity)&&entity.isValid()) {
             String anchor=entity.getPersistentDataContainer().get(ANCHOR,PersistentDataType.STRING);
-            if(anchor!=null&&(!records.containsKey(anchor)||!records.get(anchor).displayId().equals(entity.getUniqueId()))){entity.remove();continue;}
+            if(anchor!=null&&(!records.containsKey(anchor)||!Objects.equals(records.get(anchor).displayId(),entity.getUniqueId()))){entity.remove();continue;}
             entity.setVisibleByDefault(false);showReady((Display)entity);
         }
     }

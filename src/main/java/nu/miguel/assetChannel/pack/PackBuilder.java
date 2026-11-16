@@ -15,6 +15,7 @@ import nu.miguel.assetChannel.asset.Music;
 public class PackBuilder {
 
     public static boolean build(List<Asset> assets) {
+        NativeBlockStates.validate(assets);
         TexturePack texturePack = new TexturePack();
         boolean published = false;
         try {
@@ -24,7 +25,10 @@ public class PackBuilder {
             if (!buildMusic(texturePack, assets)) return false;
             if (!SpacingFont.build(texturePack)) return false;
             for (Asset asset : assets) if (asset instanceof ImportedResources && !asset.build(texturePack)) return false;
+            try { NativeBlockStates.build(texturePack, assets); }
+            catch (java.io.IOException error) { throw new IllegalStateException("Could not generate reserved block states", error); }
             for (Asset asset : assets) if (asset instanceof PackExtras && !asset.build(texturePack)) return false;
+            for (Asset asset : assets) if (asset instanceof BlockStateReservations.Snapshot && !asset.build(texturePack)) return false;
             texturePack.publish();
             published = true;
             return true;

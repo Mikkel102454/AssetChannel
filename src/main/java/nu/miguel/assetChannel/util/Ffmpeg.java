@@ -125,7 +125,7 @@ public final class Ffmpeg {
     }
 
     private static Path cacheRoot() {
-        if (Main.plugin != null) return Main.plugin.getDataPath().resolve("cache").resolve("audio");
+        if (Main.plugin != null) return Main.plugin.getDataPath().resolve("generated/cache/audio");
         return Path.of(System.getProperty("java.io.tmpdir"), "assetchannel-audio-cache");
     }
 
