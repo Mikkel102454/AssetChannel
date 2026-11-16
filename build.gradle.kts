@@ -59,7 +59,7 @@ tasks {
     }
 }
 
-group = "com.yourname"
+group = "nu.miguel"
 version = "1.0.0"
 
 publishing {
@@ -78,7 +78,7 @@ publishing {
     repositories {
         maven {
             name = "reposilite"
-            url = uri("https://maven.yourdomain.com/releases")
+            url = uri("https://maven.miguel.nu/releases")
 
             credentials {
                 username = System.getenv("MAVEN_USERNAME")
