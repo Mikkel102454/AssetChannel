@@ -1,18 +1,19 @@
 package nu.miguel.assetChannel.api;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
-import java.util.UUID;
 import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.UUID;
 
 class SoundOriginTest {
-    @Test void fixedOriginSnapshotsCoordinates() {
+    @Test
+    void fixedOriginSnapshotsCoordinates() {
         World world = proxy(World.class, UUID.randomUUID(), null);
         Location location = new Location(world, 1.5, 2.5, 3.5);
         SoundOrigin.Fixed origin = SoundOrigin.fixed(location);
@@ -23,7 +24,8 @@ class SoundOriginTest {
         assertNotSame(origin.location(), origin.location());
     }
 
-    @Test void entityOriginCapturesIdentityAndFallback() {
+    @Test
+    void entityOriginCapturesIdentityAndFallback() {
         UUID id = UUID.randomUUID();
         World world = proxy(World.class, UUID.randomUUID(), null);
         Location location = new Location(world, 4, 5, 6);
@@ -35,12 +37,16 @@ class SoundOriginTest {
         assertEquals(4, origin.fallback().x());
     }
 
-    @Test void rejectsNonFiniteCoordinates() {
+    @Test
+    void rejectsNonFiniteCoordinates() {
         World world = proxy(World.class, UUID.randomUUID(), null);
-        assertThrows(IllegalArgumentException.class, () -> new SoundOrigin.Fixed(world, Double.NaN, 0, 0));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new SoundOrigin.Fixed(world, Double.NaN, 0, 0));
     }
 
-    @Test void speakerGroupIsImmutableAndRejectsNestedOrRelativeOrigins() {
+    @Test
+    void speakerGroupIsImmutableAndRejectsNestedOrRelativeOrigins() {
         World world = proxy(World.class, UUID.randomUUID(), null);
         SoundOrigin.Fixed first = SoundOrigin.fixed(new Location(world, 0, 0, 0));
         SoundOrigin.Fixed second = SoundOrigin.fixed(new Location(world, 10, 0, 0));
@@ -52,21 +58,28 @@ class SoundOriginTest {
         assertEquals(List.of(first, second), speakers.origins());
         assertThrows(UnsupportedOperationException.class, () -> speakers.origins().clear());
         assertThrows(IllegalArgumentException.class, () -> SoundOrigin.speakers(List.of()));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> SoundOrigin.speakers(List.of(SoundOrigin.listenerRelative())));
         assertThrows(IllegalArgumentException.class, () -> SoundOrigin.speakers(List.of(speakers)));
     }
 
     @SuppressWarnings("unchecked")
     private static <T> T proxy(Class<T> type, UUID id, Location location) {
-        return (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (object, method, args) -> switch (method.getName()) {
-            case "getUniqueId", "getUID" -> id;
-            case "getLocation" -> location == null ? null : location.clone();
-            case "hashCode" -> System.identityHashCode(object);
-            case "equals" -> object == args[0];
-            case "toString" -> type.getSimpleName() + "Proxy";
-            default -> defaultValue(method.getReturnType());
-        });
+        return (T)
+                Proxy.newProxyInstance(
+                        type.getClassLoader(),
+                        new Class<?>[] {type},
+                        (object, method, args) ->
+                                switch (method.getName()) {
+                                    case "getUniqueId", "getUID" -> id;
+                                    case "getLocation" ->
+                                            location == null ? null : location.clone();
+                                    case "hashCode" -> System.identityHashCode(object);
+                                    case "equals" -> object == args[0];
+                                    case "toString" -> type.getSimpleName() + "Proxy";
+                                    default -> defaultValue(method.getReturnType());
+                                });
     }
 
     private static Object defaultValue(Class<?> type) {

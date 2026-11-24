@@ -1,0 +1,13 @@
+size: 11
+oversample: 2
+shift: [0, 0]
+caption:
+  size: 11
+  outline-width: 1
+  outline-color: '#000000'
+  shadow-offset: 1
+  shadow-color: '#00000099'
+  box:
+    texture: cinematic:gui/caption_box
+    border: 2
+    padding: 4

@@ -1,0 +1,10 @@
+*.java text eol=lf
+*.kts text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.css text eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+.editorconfig text eol=lf
+.gitignore text eol=lf

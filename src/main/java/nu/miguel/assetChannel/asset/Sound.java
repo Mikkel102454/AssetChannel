@@ -1,17 +1,18 @@
 package nu.miguel.assetChannel.asset;
 
+import com.google.gson.*;
+
 import nu.miguel.assetChannel.texturepack.TexturePack;
+import nu.miguel.assetChannel.util.AudioDurationReader;
 import nu.miguel.assetChannel.util.Ffmpeg;
 
-import java.nio.file.Path;
-import java.nio.file.Files;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
-import com.google.gson.*;
 import java.util.List;
-import nu.miguel.assetChannel.util.AudioDurationReader;
 
-public class Sound implements Asset{
+public class Sound implements Asset {
     String id;
     Path path;
     private final Duration duration;
@@ -39,7 +40,8 @@ public class Sound implements Asset{
                 spatialEvent.add("sounds", spatialEntries);
                 events.add(sound.id + ".spatial", spatialEvent);
             }
-            Files.writeString(texturePack.getAssetPath().resolve("sounds.json"),
+            Files.writeString(
+                    texturePack.getAssetPath().resolve("sounds.json"),
                     new GsonBuilder().setPrettyPrinting().create().toJson(events));
             return true;
         } catch (IOException e) {
@@ -50,10 +52,16 @@ public class Sound implements Asset{
     @Override
     public boolean build(TexturePack texturePack) {
         try {
-            Path listener = texturePack.getAssetPath().resolve("sounds/listener")
-                    .resolve(id.replace('.', '/') + ".ogg");
-            Path spatial = texturePack.getAssetPath().resolve("sounds/spatial")
-                    .resolve(id.replace('.', '/') + ".ogg");
+            Path listener =
+                    texturePack
+                            .getAssetPath()
+                            .resolve("sounds/listener")
+                            .resolve(id.replace('.', '/') + ".ogg");
+            Path spatial =
+                    texturePack
+                            .getAssetPath()
+                            .resolve("sounds/spatial")
+                            .resolve(id.replace('.', '/') + ".ogg");
             Files.createDirectories(listener.getParent());
             Files.createDirectories(spatial.getParent());
             Ffmpeg.transcodeListening(path, listener);
@@ -72,9 +80,17 @@ public class Sound implements Asset{
         return id;
     }
 
-    public String getKey() { return "assetchannel:" + id; }
-    public String getSpatialKey() { return "assetchannel:" + id + ".spatial"; }
-    public Duration getDuration() { return duration; }
+    public String getKey() {
+        return "assetchannel:" + id;
+    }
+
+    public String getSpatialKey() {
+        return "assetchannel:" + id + ".spatial";
+    }
+
+    public Duration getDuration() {
+        return duration;
+    }
 
     static String resourceName(String id, boolean spatial) {
         return "assetchannel:" + (spatial ? "spatial/" : "listener/") + id.replace('.', '/');

@@ -1,5 +1,7 @@
 package nu.miguel.assetChannel.api;
+
 import net.kyori.adventure.key.Key;
+
 import java.time.Duration;
 import java.util.Objects;
 

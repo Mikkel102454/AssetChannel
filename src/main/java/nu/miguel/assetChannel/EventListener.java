@@ -1,12 +1,13 @@
 package nu.miguel.assetChannel;
 
+import nu.miguel.assetChannel.pack.PackWebServer;
+
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerResourcePackStatusEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import nu.miguel.assetChannel.pack.PackWebServer;
+import org.bukkit.event.player.PlayerResourcePackStatusEvent;
 
 public class EventListener implements Listener {
     @EventHandler
@@ -19,8 +20,11 @@ public class EventListener implements Listener {
     @EventHandler
     public void onResourcePackStatus(PlayerResourcePackStatusEvent event) {
         if (!PackWebServer.ownsPack(event.getID())) return;
-        Main.getInternalApi().setPackReady(event.getPlayer(),
-                event.getStatus() == PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED);
+        Main.getInternalApi()
+                .setPackReady(
+                        event.getPlayer(),
+                        event.getStatus()
+                                == PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED);
     }
 
     @EventHandler

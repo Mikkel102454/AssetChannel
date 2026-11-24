@@ -1,0 +1,7 @@
+.wy-nav-content { max-width: 1120px; }
+.rst-content { font-size: 16px; line-height: 1.65; }
+.rst-content h1, .rst-content h2, .rst-content h3 { line-height: 1.25; }
+.rst-content table.docutils { width: 100%; }
+.rst-content code { overflow-wrap: anywhere; }
+.rst-content pre code { overflow-wrap: normal; }
+.wy-side-nav-search, .wy-nav-top { background: #165d83; }

@@ -1,15 +1,18 @@
 package nu.miguel.assetChannel.util;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
 import java.nio.file.*;
 import java.time.Duration;
-import static org.junit.jupiter.api.Assertions.*;
 
 class OggDurationReaderTest {
     @TempDir Path directory;
 
-    @Test void readsDurationFromVorbisRateAndLastGranule() throws Exception {
+    @Test
+    void readsDurationFromVorbisRateAndLastGranule() throws Exception {
         byte[] bytes = new byte[160];
         oggPage(bytes, 0, 0);
         int packet = 32;
@@ -22,7 +25,8 @@ class OggDurationReaderTest {
         assertEquals(Duration.ofSeconds(2), OggDurationReader.read(file));
     }
 
-    @Test void rejectsMissingVorbisHeader() throws Exception {
+    @Test
+    void rejectsMissingVorbisHeader() throws Exception {
         Path file = directory.resolve("invalid.ogg");
         Files.write(file, new byte[64]);
         assertThrows(Exception.class, () -> OggDurationReader.read(file));
@@ -32,6 +36,7 @@ class OggDurationReaderTest {
         System.arraycopy("OggS".getBytes(), 0, bytes, offset, 4);
         for (int i = 0; i < 8; i++) bytes[offset + 6 + i] = (byte) (granule >>> (8 * i));
     }
+
     private static void put32(byte[] bytes, int offset, int value) {
         for (int i = 0; i < 4; i++) bytes[offset + i] = (byte) (value >>> (8 * i));
     }

@@ -7,6 +7,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.Tag;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
+
 import nu.miguel.assetChannel.api.IconAsset;
 import nu.miguel.assetChannel.asset.Hud;
 import nu.miguel.assetChannel.pack.SpacingFont;
@@ -18,7 +19,7 @@ final class HudRenderer {
     private static final Key SPACING_FONT = Key.key(SpacingFont.KEY);
     private final MiniMessage mini = MiniMessage.miniMessage();
     private final Map<String, IconAsset> icons;
-    private final Map<Integer,Integer> iconWidths = new HashMap<>();
+    private final Map<Integer, Integer> iconWidths = new HashMap<>();
 
     HudRenderer(Map<String, IconAsset> icons) {
         this.icons = icons;
@@ -29,25 +30,35 @@ final class HudRenderer {
         String source = fallback ? hud.fallbackContent() : hud.content();
         Component content = parse(source, values);
         if (fallback || hud.background() == null && hud.width() == null) return content;
-        int backgroundWidth = hud.width() == null ? icons.get(hud.background()).width() : hud.width();
+        int backgroundWidth =
+                hud.width() == null ? icons.get(hud.background()).width() : hud.width();
         int maximum = Math.max(0, backgroundWidth - hud.horizontalPadding() * 2);
         content = overflow(content, maximum, hud.overflow());
         int contentWidth = width(content);
         int left = Math.max(0, (backgroundWidth - contentWidth) / 2);
         Component result = Component.empty();
-        if (hud.background() != null) result = result.append(icon(icons.get(hud.background()))).append(spacing(-backgroundWidth));
-        result = result.append(spacing(left)).append(content).append(spacing(Math.max(0, backgroundWidth-left-contentWidth)));
+        if (hud.background() != null)
+            result =
+                    result.append(icon(icons.get(hud.background())))
+                            .append(spacing(-backgroundWidth));
+        result =
+                result.append(spacing(left))
+                        .append(content)
+                        .append(spacing(Math.max(0, backgroundWidth - left - contentWidth)));
         return result;
     }
 
     Component subtitle(Hud hud, Map<String, Component> values, boolean fallback) {
         return fallback ? Component.empty() : parse(hud.subtitle(), values);
     }
-    Component parseAssetText(String source) { return parse(source, Map.of()); }
+
+    Component parseAssetText(String source) {
+        return parse(source, Map.of());
+    }
 
     Map<String, Component> resolve(Hud hud, Map<String, Component> supplied) {
         if (!hud.variables().keySet().containsAll(supplied.keySet())) return null;
-        Map<String,Component> result = new LinkedHashMap<>();
+        Map<String, Component> result = new LinkedHashMap<>();
         for (var entry : hud.variables().entrySet()) {
             Component value = supplied.get(entry.getKey());
             if (value == null && entry.getValue().defaultValue() != null)
@@ -58,24 +69,38 @@ final class HudRenderer {
         return Map.copyOf(result);
     }
 
-    private Component parse(String source, Map<String,Component> values) {
-        TagResolver variables = TagResolver.resolver("var", (args, context) -> {
-            String name = args.popOr("HUD variable name is required").value();
-            Component value = values.get(name);
-            return value == null ? null : Tag.inserting(value);
-        });
-        TagResolver icon = TagResolver.resolver("icon", (args, context) -> {
-            IconAsset value = icons.get(args.popOr("Icon id is required").value().toLowerCase(Locale.ROOT));
-            return value == null ? null : Tag.inserting(icon(value));
-        });
-        return mini.deserialize(source == null ? "" : source, variables, icon, SpacingFont.resolver());
+    private Component parse(String source, Map<String, Component> values) {
+        TagResolver variables =
+                TagResolver.resolver(
+                        "var",
+                        (args, context) -> {
+                            String name = args.popOr("HUD variable name is required").value();
+                            Component value = values.get(name);
+                            return value == null ? null : Tag.inserting(value);
+                        });
+        TagResolver icon =
+                TagResolver.resolver(
+                        "icon",
+                        (args, context) -> {
+                            IconAsset value =
+                                    icons.get(
+                                            args.popOr("Icon id is required")
+                                                    .value()
+                                                    .toLowerCase(Locale.ROOT));
+                            return value == null ? null : Tag.inserting(icon(value));
+                        });
+        return mini.deserialize(
+                source == null ? "" : source, variables, icon, SpacingFont.resolver());
     }
 
     private static Component icon(IconAsset icon) {
         return Component.text(icon.character()).font(icon.font());
     }
 
-    int width(Component component) { return Math.max(0, rawWidth(component, Style.empty()) - 1); }
+    int width(Component component) {
+        return Math.max(0, rawWidth(component, Style.empty()) - 1);
+    }
+
     private int rawWidth(Component component, Style parent) {
         Style style = component.style().merge(parent, Style.Merge.Strategy.IF_ABSENT_ON_TARGET);
         int total = 0;
@@ -91,8 +116,15 @@ final class HudRenderer {
 
     private int advance(int cp, Style style) {
         if (SPACING_FONT.equals(style.font())) return cp - SpacingFont.BASE + SpacingFont.MIN;
-        int width = ICON_FONT.equals(style.font()) && iconWidths.containsKey(cp) ? iconWidths.get(cp) : defaultWidth(cp);
-        return width + 1 + (cp != ' ' && style.decoration(TextDecoration.BOLD) == TextDecoration.State.TRUE ? 1 : 0);
+        int width =
+                ICON_FONT.equals(style.font()) && iconWidths.containsKey(cp)
+                        ? iconWidths.get(cp)
+                        : defaultWidth(cp);
+        return width
+                + 1
+                + (cp != ' ' && style.decoration(TextDecoration.BOLD) == TextDecoration.State.TRUE
+                        ? 1
+                        : 0);
     }
 
     private static int defaultWidth(int cp) {
@@ -109,9 +141,12 @@ final class HudRenderer {
 
     private Component overflow(Component value, int maximum, Hud.Overflow mode) {
         if (width(value) <= maximum) return value;
-        Component suffix = mode == Hud.Overflow.ELLIPSIS && width(Component.text("...")) <= maximum ? Component.text("...") : Component.empty();
+        Component suffix =
+                mode == Hud.Overflow.ELLIPSIS && width(Component.text("...")) <= maximum
+                        ? Component.text("...")
+                        : Component.empty();
         int allowed = Math.max(0, maximum + 1 - rawWidth(suffix, Style.empty()));
-        Component clipped = truncate(value, allowed, new int[]{0, 0}, Style.empty());
+        Component clipped = truncate(value, allowed, new int[] {0, 0}, Style.empty());
         return clipped.append(suffix);
     }
 
@@ -122,8 +157,12 @@ final class HudRenderer {
             StringBuilder kept = new StringBuilder();
             for (int cp : text.content().codePoints().toArray()) {
                 int w = advance(cp, style);
-                if (used[0] + w > maximum) { used[1] = 1; break; }
-                kept.appendCodePoint(cp); used[0] += w;
+                if (used[0] + w > maximum) {
+                    used[1] = 1;
+                    break;
+                }
+                kept.appendCodePoint(cp);
+                used[0] += w;
             }
             out = text.content(kept.toString()).children(List.of());
         }

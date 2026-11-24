@@ -9,6 +9,7 @@ public record IconAsset(String id, Key font, int codePoint, int height, int asce
     public IconAsset(String id, Key font, int codePoint, int height, int ascent) {
         this(id, font, codePoint, height, ascent, height);
     }
+
     public IconAsset {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(font, "font");
@@ -18,7 +19,8 @@ public record IconAsset(String id, Key font, int codePoint, int height, int asce
         }
         if (height <= 0) throw new IllegalArgumentException("height must be greater than zero");
         if (width <= 0) throw new IllegalArgumentException("width must be greater than zero");
-        if (ascent > height) throw new IllegalArgumentException("ascent cannot be greater than height");
+        if (ascent > height)
+            throw new IllegalArgumentException("ascent cannot be greater than height");
     }
 
     /** The actual character to put in an Adventure text component. */

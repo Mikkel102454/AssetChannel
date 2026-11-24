@@ -7,6 +7,7 @@ public record MusicStageAsset(String id, Duration duration, int segmentCount, bo
     public MusicStageAsset {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(duration, "duration");
-        if (segmentCount < 0) throw new IllegalArgumentException("segmentCount must be non-negative");
+        if (segmentCount < 0)
+            throw new IllegalArgumentException("segmentCount must be non-negative");
     }
 }

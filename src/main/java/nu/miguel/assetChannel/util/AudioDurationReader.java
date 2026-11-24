@@ -16,11 +16,12 @@ public final class AudioDurationReader {
 
     public static Duration read(Path path) throws IOException {
         String extension = extension(path);
-        Duration duration = switch (extension) {
-            case "ogg" -> OggDurationReader.read(path);
-            case "mp3" -> readMp3(path);
-            default -> throw new IOException("Unsupported audio format: " + path);
-        };
+        Duration duration =
+                switch (extension) {
+                    case "ogg" -> OggDurationReader.read(path);
+                    case "mp3" -> readMp3(path);
+                    default -> throw new IOException("Unsupported audio format: " + path);
+                };
         if (duration.isZero() || duration.isNegative())
             throw new IOException("Audio has no positive duration: " + path);
         return duration;
@@ -37,7 +38,8 @@ public final class AudioDurationReader {
 
     private static Duration readMp3(Path path) throws IOException {
         try {
-            MultimediaInfo info = new MultimediaObject(path.toFile(), new DefaultFFMPEGLocator()).getInfo();
+            MultimediaInfo info =
+                    new MultimediaObject(path.toFile(), new DefaultFFMPEGLocator()).getInfo();
             if (info.getAudio() == null)
                 throw new IOException("MP3 contains no audio stream: " + path);
             return Duration.ofMillis(info.getDuration());

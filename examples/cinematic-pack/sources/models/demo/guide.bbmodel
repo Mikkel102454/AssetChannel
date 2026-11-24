@@ -1,0 +1,864 @@
+{
+    "name":  "Demo Guide",
+    "animations":  [
+                       {
+                           "loop":  "loop",
+                           "name":  "idle",
+                           "animators":  {
+
+                                         },
+                           "length":  1
+                       },
+                       {
+                           "loop":  "loop",
+                           "name":  "walk",
+                           "animators":  {
+                                             "262c3c6e-0bb5-460c-a3e9-afa8017fd208":  {
+                                                                                          "keyframes":  [
+                                                                                                            {
+                                                                                                                "time":  0,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  25
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  0.5,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  -25
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  1,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  25
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            }
+                                                                                                        ],
+                                                                                          "name":  "right_leg",
+                                                                                          "type":  "bone"
+                                                                                      },
+                                             "672ed7cb-adfd-4539-9718-2d33461093d0":  {
+                                                                                          "keyframes":  [
+                                                                                                            {
+                                                                                                                "time":  0,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  -25
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  0.5,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  25
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  1,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  -25
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            }
+                                                                                                        ],
+                                                                                          "name":  "left_leg",
+                                                                                          "type":  "bone"
+                                                                                      },
+                                             "1b515916-908c-4e07-822d-3be04eeb05fb":  {
+                                                                                          "keyframes":  [
+                                                                                                            {
+                                                                                                                "time":  0,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  20
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  0.5,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  -20
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  1,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  20
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            }
+                                                                                                        ],
+                                                                                          "name":  "left_arm",
+                                                                                          "type":  "bone"
+                                                                                      },
+                                             "bd91d6fa-69df-41aa-861e-9146953c9696":  {
+                                                                                          "keyframes":  [
+                                                                                                            {
+                                                                                                                "time":  0,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  -20
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  0.5,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  20
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  1,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  0,
+                                                                                                                                        "x":  -20
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            }
+                                                                                                        ],
+                                                                                          "name":  "right_arm",
+                                                                                          "type":  "bone"
+                                                                                      }
+                                         },
+                           "length":  1
+                       },
+                       {
+                           "loop":  "loop",
+                           "name":  "talk",
+                           "animators":  {
+                                             "bd91d6fa-69df-41aa-861e-9146953c9696":  {
+                                                                                          "keyframes":  [
+                                                                                                            {
+                                                                                                                "time":  0,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  -15,
+                                                                                                                                        "x":  0
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  0.5,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  15,
+                                                                                                                                        "x":  0
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  1,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  -15,
+                                                                                                                                        "x":  0
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            }
+                                                                                                        ],
+                                                                                          "name":  "right_arm",
+                                                                                          "type":  "bone"
+                                                                                      },
+                                             "61e516f0-4f18-4013-b754-632602e1d3bf":  {
+                                                                                          "keyframes":  [
+                                                                                                            {
+                                                                                                                "time":  0,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  -5,
+                                                                                                                                        "x":  0
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  0.5,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  5,
+                                                                                                                                        "x":  0
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "time":  1,
+                                                                                                                "channel":  "rotation",
+                                                                                                                "interpolation":  "catmullrom",
+                                                                                                                "data_points":  [
+                                                                                                                                    {
+                                                                                                                                        "y":  0,
+                                                                                                                                        "z":  -5,
+                                                                                                                                        "x":  0
+                                                                                                                                    }
+                                                                                                                                ]
+                                                                                                            }
+                                                                                                        ],
+                                                                                          "name":  "head",
+                                                                                          "type":  "bone"
+                                                                                      }
+                                         },
+                           "length":  1
+                       }
+                   ],
+    "elements":  [
+                     {
+                         "uuid":  "8c420e27-59e0-4c4b-9940-5135be74a88b",
+                         "to":  [
+                                    4,
+                                    24,
+                                    2
+                                ],
+                         "from":  [
+                                      -4,
+                                      12,
+                                      -2
+                                  ],
+                         "type":  "cube",
+                         "name":  "body",
+                         "faces":  {
+                                       "south":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  0
+                                                 },
+                                       "north":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  0
+                                                 },
+                                       "up":  {
+                                                  "uv":  [
+                                                             0,
+                                                             0,
+                                                             16,
+                                                             16
+                                                         ],
+                                                  "texture":  0
+                                              },
+                                       "west":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                },
+                                       "down":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                },
+                                       "east":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                }
+                                   },
+                         "origin":  [
+                                        0,
+                                        12,
+                                        0
+                                    ]
+                     },
+                     {
+                         "uuid":  "f61310c1-60c1-4656-8238-989374c752d3",
+                         "to":  [
+                                    4,
+                                    32,
+                                    4
+                                ],
+                         "from":  [
+                                      -4,
+                                      24,
+                                      -4
+                                  ],
+                         "type":  "cube",
+                         "name":  "head",
+                         "faces":  {
+                                       "south":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  1
+                                                 },
+                                       "north":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  1
+                                                 },
+                                       "up":  {
+                                                  "uv":  [
+                                                             0,
+                                                             0,
+                                                             16,
+                                                             16
+                                                         ],
+                                                  "texture":  1
+                                              },
+                                       "west":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  1
+                                                },
+                                       "down":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  1
+                                                },
+                                       "east":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  1
+                                                }
+                                   },
+                         "origin":  [
+                                        0,
+                                        24,
+                                        0
+                                    ]
+                     },
+                     {
+                         "uuid":  "01215c10-91ce-4426-a1ab-b4b62bbbefe4",
+                         "to":  [
+                                    -4,
+                                    24,
+                                    2
+                                ],
+                         "from":  [
+                                      -8,
+                                      12,
+                                      -2
+                                  ],
+                         "type":  "cube",
+                         "name":  "left_arm",
+                         "faces":  {
+                                       "south":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  0
+                                                 },
+                                       "north":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  0
+                                                 },
+                                       "up":  {
+                                                  "uv":  [
+                                                             0,
+                                                             0,
+                                                             16,
+                                                             16
+                                                         ],
+                                                  "texture":  0
+                                              },
+                                       "west":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                },
+                                       "down":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                },
+                                       "east":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                }
+                                   },
+                         "origin":  [
+                                        -6,
+                                        23,
+                                        0
+                                    ]
+                     },
+                     {
+                         "uuid":  "968f2001-a83b-4a3b-b4af-ee7ac1da5e31",
+                         "to":  [
+                                    8,
+                                    24,
+                                    2
+                                ],
+                         "from":  [
+                                      4,
+                                      12,
+                                      -2
+                                  ],
+                         "type":  "cube",
+                         "name":  "right_arm",
+                         "faces":  {
+                                       "south":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  0
+                                                 },
+                                       "north":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  0
+                                                 },
+                                       "up":  {
+                                                  "uv":  [
+                                                             0,
+                                                             0,
+                                                             16,
+                                                             16
+                                                         ],
+                                                  "texture":  0
+                                              },
+                                       "west":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                },
+                                       "down":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                },
+                                       "east":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                }
+                                   },
+                         "origin":  [
+                                        6,
+                                        23,
+                                        0
+                                    ]
+                     },
+                     {
+                         "uuid":  "ec191c39-64e3-432a-b7e6-a1740c7ef16e",
+                         "to":  [
+                                    0,
+                                    12,
+                                    2
+                                ],
+                         "from":  [
+                                      -4,
+                                      0,
+                                      -2
+                                  ],
+                         "type":  "cube",
+                         "name":  "left_leg",
+                         "faces":  {
+                                       "south":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  0
+                                                 },
+                                       "north":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  0
+                                                 },
+                                       "up":  {
+                                                  "uv":  [
+                                                             0,
+                                                             0,
+                                                             16,
+                                                             16
+                                                         ],
+                                                  "texture":  0
+                                              },
+                                       "west":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                },
+                                       "down":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                },
+                                       "east":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                }
+                                   },
+                         "origin":  [
+                                        -2,
+                                        12,
+                                        0
+                                    ]
+                     },
+                     {
+                         "uuid":  "4e19b7bf-8fef-4e50-b8b2-a2b7383bcdd3",
+                         "to":  [
+                                    4,
+                                    12,
+                                    2
+                                ],
+                         "from":  [
+                                      0,
+                                      0,
+                                      -2
+                                  ],
+                         "type":  "cube",
+                         "name":  "right_leg",
+                         "faces":  {
+                                       "south":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  0
+                                                 },
+                                       "north":  {
+                                                     "uv":  [
+                                                                0,
+                                                                0,
+                                                                16,
+                                                                16
+                                                            ],
+                                                     "texture":  0
+                                                 },
+                                       "up":  {
+                                                  "uv":  [
+                                                             0,
+                                                             0,
+                                                             16,
+                                                             16
+                                                         ],
+                                                  "texture":  0
+                                              },
+                                       "west":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                },
+                                       "down":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                },
+                                       "east":  {
+                                                    "uv":  [
+                                                               0,
+                                                               0,
+                                                               16,
+                                                               16
+                                                           ],
+                                                    "texture":  0
+                                                }
+                                   },
+                         "origin":  [
+                                        2,
+                                        12,
+                                        0
+                                    ]
+                     }
+                 ],
+    "resolution":  {
+                       "height":  16,
+                       "width":  16
+                   },
+    "meta":  {
+                 "format_version":  "4.10",
+                 "model_format":  "free",
+                 "box_uv":  false
+             },
+    "outliner":  [
+                     {
+                         "uuid":  "dbe7f85b-8ead-4693-a2de-46a64e568a79",
+                         "rotation":  [
+                                          0,
+                                          0,
+                                          0
+                                      ],
+                         "name":  "body",
+                         "origin":  [
+                                        0,
+                                        12,
+                                        0
+                                    ],
+                         "children":  [
+                                          "8c420e27-59e0-4c4b-9940-5135be74a88b",
+                                          {
+                                              "uuid":  "61e516f0-4f18-4013-b754-632602e1d3bf",
+                                              "rotation":  [
+                                                               0,
+                                                               0,
+                                                               0
+                                                           ],
+                                              "name":  "head",
+                                              "origin":  [
+                                                             0,
+                                                             24,
+                                                             0
+                                                         ],
+                                              "children":  [
+                                                               "f61310c1-60c1-4656-8238-989374c752d3"
+                                                           ]
+                                          },
+                                          {
+                                              "uuid":  "1b515916-908c-4e07-822d-3be04eeb05fb",
+                                              "rotation":  [
+                                                               0,
+                                                               0,
+                                                               0
+                                                           ],
+                                              "name":  "left_arm",
+                                              "origin":  [
+                                                             -6,
+                                                             23,
+                                                             0
+                                                         ],
+                                              "children":  [
+                                                               "01215c10-91ce-4426-a1ab-b4b62bbbefe4"
+                                                           ]
+                                          },
+                                          {
+                                              "uuid":  "bd91d6fa-69df-41aa-861e-9146953c9696",
+                                              "rotation":  [
+                                                               0,
+                                                               0,
+                                                               0
+                                                           ],
+                                              "name":  "right_arm",
+                                              "origin":  [
+                                                             6,
+                                                             23,
+                                                             0
+                                                         ],
+                                              "children":  [
+                                                               "968f2001-a83b-4a3b-b4af-ee7ac1da5e31"
+                                                           ]
+                                          },
+                                          {
+                                              "uuid":  "672ed7cb-adfd-4539-9718-2d33461093d0",
+                                              "rotation":  [
+                                                               0,
+                                                               0,
+                                                               0
+                                                           ],
+                                              "name":  "left_leg",
+                                              "origin":  [
+                                                             -2,
+                                                             12,
+                                                             0
+                                                         ],
+                                              "children":  [
+                                                               "ec191c39-64e3-432a-b7e6-a1740c7ef16e"
+                                                           ]
+                                          },
+                                          {
+                                              "uuid":  "262c3c6e-0bb5-460c-a3e9-afa8017fd208",
+                                              "rotation":  [
+                                                               0,
+                                                               0,
+                                                               0
+                                                           ],
+                                              "name":  "right_leg",
+                                              "origin":  [
+                                                             2,
+                                                             12,
+                                                             0
+                                                         ],
+                                              "children":  [
+                                                               "4e19b7bf-8fef-4e50-b8b2-a2b7383bcdd3"
+                                                           ]
+                                          }
+                                      ]
+                     }
+                 ],
+    "textures":  [
+                     {
+                         "uuid":  "81477941-7a60-44bc-bd9d-18f70ff237c9",
+                         "source":  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAdSURBVDhPY9Ao2PKfEsyALkAqHjVg1IBRAwaLAQA9WUsfE++N5AAAAABJRU5ErkJggg==",
+                         "name":  "coat",
+                         "id":  "0"
+                     },
+                     {
+                         "uuid":  "bc28849c-6511-4ee7-a1a1-7783ebdc496f",
+                         "source":  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAA4SURBVDhPY7i3o/0/JZgBXYBUPBwNYGBgAGOixTEEcCnEJY4uQCoezgZ0MzCgYHR5ggYQi4eBAQD+/gT+seC80QAAAABJRU5ErkJggg==",
+                         "name":  "face",
+                         "id":  "1"
+                     }
+                 ]
+}

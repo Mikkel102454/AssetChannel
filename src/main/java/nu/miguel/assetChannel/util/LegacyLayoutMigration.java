@@ -30,21 +30,32 @@ final class LegacyLayoutMigration {
             if (!Files.exists(source, LinkOption.NOFOLLOW_LINKS)) continue;
             try (var paths = Files.walk(source)) {
                 for (Path path : paths.sorted().toList()) {
-                    if (Files.isSymbolicLink(path)) throw new IOException("Migration symlinks are unsupported: " + path);
+                    if (Files.isSymbolicLink(path))
+                        throw new IOException("Migration symlinks are unsupported: " + path);
                     Path target = destination.resolve(source.relativize(path));
-                    for (Path ancestor = target; ancestor != null && ancestor.startsWith(root); ancestor = ancestor.getParent()) {
-                        if (Files.isSymbolicLink(ancestor)) throw new IOException("Migration target is a symlink: " + ancestor);
-                        if (!ancestor.equals(target) && Files.exists(ancestor) && !Files.isDirectory(ancestor))
-                            throw new IOException("Migration target parent is not a folder: " + ancestor);
+                    for (Path ancestor = target;
+                            ancestor != null && ancestor.startsWith(root);
+                            ancestor = ancestor.getParent()) {
+                        if (Files.isSymbolicLink(ancestor))
+                            throw new IOException("Migration target is a symlink: " + ancestor);
+                        if (!ancestor.equals(target)
+                                && Files.exists(ancestor)
+                                && !Files.isDirectory(ancestor))
+                            throw new IOException(
+                                    "Migration target parent is not a folder: " + ancestor);
                     }
                     if (Files.isDirectory(path)) {
-                        if (Files.exists(target) && !Files.isDirectory(target)) conflict(path, target);
+                        if (Files.exists(target) && !Files.isDirectory(target))
+                            conflict(path, target);
                         continue;
                     }
-                    if (!Files.isRegularFile(path)) throw new IOException("Unsupported migration file: " + path);
+                    if (!Files.isRegularFile(path))
+                        throw new IOException("Unsupported migration file: " + path);
                     Path previous = targets.putIfAbsent(target, path);
-                    if (previous != null && Files.mismatch(previous, path) != -1) conflict(path, target);
-                    if (Files.exists(target) && (!Files.isRegularFile(target) || Files.mismatch(path, target) != -1))
+                    if (previous != null && Files.mismatch(previous, path) != -1)
+                        conflict(path, target);
+                    if (Files.exists(target)
+                            && (!Files.isRegularFile(target) || Files.mismatch(path, target) != -1))
                         conflict(path, target);
                     plan.add(new Move(path, target));
                 }
@@ -56,7 +67,8 @@ final class LegacyLayoutMigration {
         try {
             for (Move move : plan) {
                 if (Files.exists(move.target())) {
-                    if (Files.mismatch(move.source(), move.target()) != -1) conflict(move.source(), move.target());
+                    if (Files.mismatch(move.source(), move.target()) != -1)
+                        conflict(move.source(), move.target());
                     duplicates.add(move);
                 } else {
                     Files.createDirectories(move.target().getParent());
@@ -65,10 +77,13 @@ final class LegacyLayoutMigration {
                 }
             }
         } catch (IOException error) {
-            for (Move move : moved.reversed()) try {
-                Files.createDirectories(move.source().getParent());
-                Files.move(move.target(), move.source());
-            } catch (IOException rollback) { error.addSuppressed(rollback); }
+            for (Move move : moved.reversed())
+                try {
+                    Files.createDirectories(move.source().getParent());
+                    Files.move(move.target(), move.source());
+                } catch (IOException rollback) {
+                    error.addSuppressed(rollback);
+                }
             throw error;
         }
         for (Move duplicate : duplicates) Files.delete(duplicate.source());
@@ -77,7 +92,12 @@ final class LegacyLayoutMigration {
     }
 
     private static void conflict(Path source, Path target) throws IOException {
-        throw new IOException("Migration conflict: " + source + " -> " + target + "; resolve the differing files before restarting");
+        throw new IOException(
+                "Migration conflict: "
+                        + source
+                        + " -> "
+                        + target
+                        + "; resolve the differing files before restarting");
     }
 
     private static void removeEmptyFolders(Path root) throws IOException {
@@ -86,7 +106,9 @@ final class LegacyLayoutMigration {
             for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
                 if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) continue;
                 boolean empty;
-                try (var children = Files.list(path)) { empty = children.findAny().isEmpty(); }
+                try (var children = Files.list(path)) {
+                    empty = children.findAny().isEmpty();
+                }
                 if (empty) Files.delete(path);
             }
         }

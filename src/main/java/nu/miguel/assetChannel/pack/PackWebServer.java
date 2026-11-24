@@ -3,13 +3,16 @@ package nu.miguel.assetChannel.pack;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+
 import net.kyori.adventure.resource.ResourcePackInfo;
 import net.kyori.adventure.resource.ResourcePackRequest;
 import net.kyori.adventure.text.Component;
+
 import nu.miguel.assetChannel.Main;
 import nu.miguel.assetChannel.util.Config;
 import nu.miguel.assetChannel.util.Logger;
 import nu.miguel.assetChannel.util.PathResolver;
+
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -32,7 +35,9 @@ public final class PackWebServer {
     private static final String PACK_FILE_NAME = "pack.zip";
     private static final UUID PACK_UUID = UUID.fromString("2c6f8b1d-45a8-4c8e-9b2e-4f5f7e2a1c11");
 
-    public static boolean ownsPack(UUID id) { return PACK_UUID.equals(id); }
+    public static boolean ownsPack(UUID id) {
+        return PACK_UUID.equals(id);
+    }
 
     private final Path packZipPath = PathResolver.getPackZipPath();
 
@@ -40,7 +45,8 @@ public final class PackWebServer {
     private ExecutorService executor;
 
     // snapshot of the current serving pack
-    private final AtomicReference<PackSnapshot> snapshotRef = new AtomicReference<>(PackSnapshot.empty());
+    private final AtomicReference<PackSnapshot> snapshotRef =
+            new AtomicReference<>(PackSnapshot.empty());
 
     public void startHttpServer() throws IOException {
         int port = (int) Config.get("overrides.pack.port", 25566);
@@ -52,7 +58,9 @@ public final class PackWebServer {
         httpServer.createContext("/" + PACK_FILE_NAME, this::handlePackRequest);
 
         // thread pool to stpo 1 client from blocking
-        executor = Executors.newFixedThreadPool(Math.max(2, Runtime.getRuntime().availableProcessors()));
+        executor =
+                Executors.newFixedThreadPool(
+                        Math.max(2, Runtime.getRuntime().availableProcessors()));
         httpServer.setExecutor(executor);
 
         httpServer.start();
@@ -72,8 +80,7 @@ public final class PackWebServer {
     }
 
     /**
-     * Call this after you rebuild/replace pack.zip.
-     * It swaps the in-memory bytes + sha1 atomically.
+     * Call this after you rebuild/replace pack.zip. It swaps the in-memory bytes + sha1 atomically.
      */
     public void reloadPackSnapshot() {
         try {
@@ -85,25 +92,24 @@ public final class PackWebServer {
             byte[] bytes = Files.readAllBytes(packZipPath);
             String sha1 = sha1Hex(bytes);
 
-            PackSnapshot newSnapshot =
-                    new PackSnapshot(bytes, sha1);
+            PackSnapshot newSnapshot = new PackSnapshot(bytes, sha1);
 
             snapshotRef.set(newSnapshot);
 
             Logger.log(Level.INFO, "Loaded resource pack snapshot. SHA-1: " + sha1);
 
-            Bukkit.getScheduler().runTask(Main.plugin, () -> {
-                for (Player player : Bukkit.getOnlinePlayers()) {
-                    Main.getInternalApi().setPackReady(player, false);
-                    givePlayerPack(player);
-                }
-            });
+            Bukkit.getScheduler()
+                    .runTask(
+                            Main.plugin,
+                            () -> {
+                                for (Player player : Bukkit.getOnlinePlayers()) {
+                                    Main.getInternalApi().setPackReady(player, false);
+                                    givePlayerPack(player);
+                                }
+                            });
 
         } catch (Exception e) {
-            Logger.log(
-                    Level.SEVERE,
-                    "Failed to reload resource pack: " + e.getMessage()
-            );
+            Logger.log(Level.SEVERE, "Failed to reload resource pack: " + e.getMessage());
         }
     }
 
@@ -156,12 +162,15 @@ public final class PackWebServer {
 
         ResourcePackInfo info = ResourcePackInfo.resourcePackInfo(PACK_UUID, uri, snap.sha1);
 
-        ResourcePackRequest request = ResourcePackRequest.resourcePackRequest()
-                .packs(info)
-                .prompt(Component.text("This server uses a resource pack. Please accept to play."))
-                .required(required)
-                .replace(replace)
-                .build();
+        ResourcePackRequest request =
+                ResourcePackRequest.resourcePackRequest()
+                        .packs(info)
+                        .prompt(
+                                Component.text(
+                                        "This server uses a resource pack. Please accept to play."))
+                        .required(required)
+                        .replace(replace)
+                        .build();
 
         player.sendResourcePacks(request);
     }

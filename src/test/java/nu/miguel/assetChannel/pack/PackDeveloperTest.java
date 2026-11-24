@@ -1,80 +1,116 @@
 package nu.miguel.assetChannel.pack;
 
-import nu.miguel.assetChannel.asset.Asset;
-import nu.miguel.assetChannel.asset.Icon;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import nu.miguel.assetChannel.asset.Asset;
+import nu.miguel.assetChannel.asset.Icon;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.awt.image.BufferedImage;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import javax.imageio.ImageIO;
+
 class PackDeveloperTest {
-    @Test void rejectsInvalidSpacingBeforePackPublication() throws Exception {
+    @Test
+    void rejectsInvalidSpacingBeforePackPublication() throws Exception {
         Path yaml = directory.resolve("bad.yml");
         Files.writeString(yaml, "surface: action-bar\nlayout: {content: '<space:999999>'}\n");
         var hud = nu.miguel.assetChannel.asset.Hud.load("bad", yaml);
-        assertThrows(IllegalArgumentException.class, () -> PackDeveloper.validateAssets(List.of(hud)));
+        assertThrows(
+                IllegalArgumentException.class, () -> PackDeveloper.validateAssets(List.of(hud)));
     }
-    @Test void acceptsImportedFontInHud() throws Exception {
+
+    @Test
+    void acceptsImportedFontInHud() throws Exception {
         Path nativeFont = directory.resolve("packs/main/assets/assetchannel/font/panel.json");
-        Files.createDirectories(nativeFont.getParent()); Files.writeString(nativeFont, "{\"providers\":[]}");
+        Files.createDirectories(nativeFont.getParent());
+        Files.writeString(nativeFont, "{\"providers\":[]}");
         Path yaml = directory.resolve("native.yml");
-        Files.writeString(yaml, "surface: boss-bar\nlayout: {content: '<font:assetchannel:panel>test</font>'}\n");
+        Files.writeString(
+                yaml,
+                "surface: boss-bar\nlayout: {content: '<font:assetchannel:panel>test</font>'}\n");
         var hud = nu.miguel.assetChannel.asset.Hud.load("native", yaml);
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> PackDeveloper.validateAssets(List.of(hud, ImportedResources.scan(directory.resolve("packs/main/assets")))));
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
+                PackDeveloper.validateAssets(
+                        List.of(
+                                hud,
+                                ImportedResources.scan(directory.resolve("packs/main/assets")))));
     }
+
     @TempDir Path directory;
 
-    @Test void discoversMp3AndOggCaseInsensitively() throws Exception {
-        Files.write(directory.resolve("effect.ogg"), new byte[]{1});
-        Files.write(directory.resolve("effect.MP3"), new byte[]{1});
-        Files.write(directory.resolve("ignored.wav"), new byte[]{1});
+    @Test
+    void discoversMp3AndOggCaseInsensitively() throws Exception {
+        Files.write(directory.resolve("effect.ogg"), new byte[] {1});
+        Files.write(directory.resolve("effect.MP3"), new byte[] {1});
+        Files.write(directory.resolve("ignored.wav"), new byte[] {1});
 
-        assertEquals(List.of("effect", "effect"), PackDeveloper.scanSoundFiles(directory).stream()
-                .map(AssetFile::id).sorted().toList());
+        assertEquals(
+                List.of("effect", "effect"),
+                PackDeveloper.scanSoundFiles(directory).stream()
+                        .map(AssetFile::id)
+                        .sorted()
+                        .toList());
     }
 
-    @Test void rejectsSameStemSoundIds() {
+    @Test
+    void rejectsSameStemSoundIds() {
         Asset first = new StubSound("effect");
         Asset second = new StubSound("effect");
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> PackDeveloper.validateAssets(List.of(first, second)));
     }
 
-    @Test void generatesStablePrivateUseUnicodeWhenConfigOmitsIt() throws Exception {
-        Icon first=icon("ui.banner",null,"first");
-        Icon second=icon("ui.banner",null,"second");
+    @Test
+    void generatesStablePrivateUseUnicodeWhenConfigOmitsIt() throws Exception {
+        Icon first = icon("ui.banner", null, "first");
+        Icon second = icon("ui.banner", null, "second");
         PackDeveloper.assignIconCodePoints(List.of(first));
         PackDeveloper.assignIconCodePoints(List.of(second));
-        assertEquals(first.getCodePoint(),second.getCodePoint());
-        assertEquals(true,first.getCodePoint()>=PackDeveloper.GENERATED_ICON_FIRST&&first.getCodePoint()<=PackDeveloper.GENERATED_ICON_LAST);
+        assertEquals(first.getCodePoint(), second.getCodePoint());
+        assertEquals(
+                true,
+                first.getCodePoint() >= PackDeveloper.GENERATED_ICON_FIRST
+                        && first.getCodePoint() <= PackDeveloper.GENERATED_ICON_LAST);
     }
 
-    @Test void automaticUnicodeAvoidsConfiguredValues() throws Exception {
-        String id="ui.auto";int capacity=PackDeveloper.GENERATED_ICON_LAST-PackDeveloper.GENERATED_ICON_FIRST+1;
-        int preferred=PackDeveloper.GENERATED_ICON_FIRST+Math.floorMod(id.hashCode(),capacity);
-        Icon explicit=icon("ui.explicit",String.format("%04X",preferred),"explicit");
-        Icon automatic=icon(id,null,"automatic");
-        PackDeveloper.assignIconCodePoints(List.of(explicit,automatic));
-        assertEquals(preferred,explicit.getCodePoint());
-        org.junit.jupiter.api.Assertions.assertNotEquals(preferred,automatic.getCodePoint());
+    @Test
+    void automaticUnicodeAvoidsConfiguredValues() throws Exception {
+        String id = "ui.auto";
+        int capacity = PackDeveloper.GENERATED_ICON_LAST - PackDeveloper.GENERATED_ICON_FIRST + 1;
+        int preferred = PackDeveloper.GENERATED_ICON_FIRST + Math.floorMod(id.hashCode(), capacity);
+        Icon explicit = icon("ui.explicit", String.format("%04X", preferred), "explicit");
+        Icon automatic = icon(id, null, "automatic");
+        PackDeveloper.assignIconCodePoints(List.of(explicit, automatic));
+        assertEquals(preferred, explicit.getCodePoint());
+        org.junit.jupiter.api.Assertions.assertNotEquals(preferred, automatic.getCodePoint());
     }
 
-    private Icon icon(String id,String unicode,String stem)throws Exception{
-        Path png=directory.resolve(stem+".png"),yaml=directory.resolve(stem+".yml");
-        ImageIO.write(new BufferedImage(16,16,BufferedImage.TYPE_INT_ARGB),"png",png.toFile());
-        Files.writeString(yaml,(unicode==null?"":"unicode: "+unicode+"\n")+"height: 16\nascent: 15\n");
-        return new Icon(id,png,yaml);
+    private Icon icon(String id, String unicode, String stem) throws Exception {
+        Path png = directory.resolve(stem + ".png"), yaml = directory.resolve(stem + ".yml");
+        ImageIO.write(new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB), "png", png.toFile());
+        Files.writeString(
+                yaml,
+                (unicode == null ? "" : "unicode: " + unicode + "\n") + "height: 16\nascent: 15\n");
+        return new Icon(id, png, yaml);
     }
 
     private record StubSound(String id) implements Asset {
-        @Override public boolean build(nu.miguel.assetChannel.texturepack.TexturePack texturePack) { return true; }
-        @Override public String getId() { return id; }
+        @Override
+        public boolean build(nu.miguel.assetChannel.texturepack.TexturePack texturePack) {
+            return true;
+        }
+
+        @Override
+        public String getId() {
+            return id;
+        }
     }
 }

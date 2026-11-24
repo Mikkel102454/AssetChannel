@@ -1,0 +1,48 @@
+site_name: AssetChannel
+site_description: Asset imports, resource packs, audio, HUDs and the Java API for Paper.
+docs_dir: docs
+site_dir: site
+dev_addr: 127.0.0.1:8000
+use_directory_urls: false
+strict: true
+not_in_nav: |
+  /java/legal/*.md
+theme:
+  name: readthedocs
+  navigation_depth: 3
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - tables
+  - fenced_code
+  - toc:
+      permalink: true
+extra_css:
+  - stylesheets/extra.css
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+  links:
+    not_found: warn
+    anchors: warn
+nav:
+  - Home: index.md
+  - Installation and configuration: setup.md
+  - Folder structure and IDs: layout.md
+  - Asset guides:
+      - Native models, textures and packs: assets/native.md
+      - Fonts, icons and screen text: assets/fonts.md
+      - Sounds and soundtracks: assets/audio.md
+      - HUD templates: assets/hud.md
+      - Blocks and displays: assets/world.md
+      - Animated models and cinematic effects: assets/cinematics.md
+  - Commands and permissions: commands.md
+  - Java API:
+      - Service, lifecycle and examples: api/guide.md
+      - Catalog and ownership overview: api/catalogs.md
+      - Complete generated reference: api/reference.md
+  - AnimationChannel integration: integration.md
+  - Troubleshooting: troubleshooting.md
+  - Building and maintaining: development.md

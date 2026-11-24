@@ -1,17 +1,18 @@
 package nu.miguel.assetChannel.asset;
 
-import nu.miguel.assetChannel.texturepack.TexturePack;
-
-import java.nio.file.Path;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
-import java.io.IOException;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.GsonBuilder;
+
+import nu.miguel.assetChannel.texturepack.TexturePack;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 
-public class Font implements Asset{
+public class Font implements Asset {
     String id;
     Path path;
 
@@ -42,15 +43,19 @@ public class Font implements Asset{
             root.add("providers", providers);
             Path definition = definitionPath(texturePack.getAssetPath());
             Files.createDirectories(definition.getParent());
-            Files.writeString(definition,
-                    new GsonBuilder().setPrettyPrinting().create().toJson(root));
+            Files.writeString(
+                    definition, new GsonBuilder().setPrettyPrinting().create().toJson(root));
             // Preserve existing dotted API keys while retaining canonical nested resource paths.
             if (id.contains(".")) {
-                JsonObject reference = new JsonObject(); reference.addProperty("type", "reference");
+                JsonObject reference = new JsonObject();
+                reference.addProperty("type", "reference");
                 reference.addProperty("id", "assetchannel:" + resourcePath);
-                JsonArray aliases = new JsonArray(); aliases.add(reference);
-                JsonObject alias = new JsonObject(); alias.add("providers", aliases);
-                Files.writeString(fontRoot.resolve(id + ".json"), new GsonBuilder().create().toJson(alias));
+                JsonArray aliases = new JsonArray();
+                aliases.add(reference);
+                JsonObject alias = new JsonObject();
+                alias.add("providers", aliases);
+                Files.writeString(
+                        fontRoot.resolve(id + ".json"), new GsonBuilder().create().toJson(alias));
             }
             return true;
         } catch (IOException e) {
@@ -63,23 +68,43 @@ public class Font implements Asset{
         return id;
     }
 
-    public String getKey() { return "assetchannel:" + id; }
+    public String getKey() {
+        return "assetchannel:" + id;
+    }
 
-    JsonObject provider() {
+    public Path sourcePath() {
+        return path;
+    }
+
+    public JsonObject provider() {
         String name = path.getFileName().toString();
         Path sidecar = path.resolveSibling(name.substring(0, name.lastIndexOf('.')) + ".yml");
-        var config = Files.exists(sidecar) ? org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(sidecar.toFile())
-                : new org.bukkit.configuration.file.YamlConfiguration();
+        var config =
+                Files.exists(sidecar)
+                        ? org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+                                sidecar.toFile())
+                        : new org.bukkit.configuration.file.YamlConfiguration();
         double size = config.getDouble("size", 11), oversample = config.getDouble("oversample", 1);
         java.util.List<?> offset = config.getList("shift", java.util.List.of(0, 0));
-        if (!Double.isFinite(size) || size <= 0 || !Double.isFinite(oversample) || oversample <= 0
-                || offset.size() != 2 || !(offset.get(0) instanceof Number x) || !(offset.get(1) instanceof Number y)
-                || !Double.isFinite(x.doubleValue()) || !Double.isFinite(y.doubleValue()))
+        if (!Double.isFinite(size)
+                || size <= 0
+                || !Double.isFinite(oversample)
+                || oversample <= 0
+                || offset.size() != 2
+                || !(offset.get(0) instanceof Number x)
+                || !(offset.get(1) instanceof Number y)
+                || !Double.isFinite(x.doubleValue())
+                || !Double.isFinite(y.doubleValue()))
             throw new IllegalArgumentException("Invalid font settings: " + sidecar);
         JsonObject provider = new JsonObject();
-        provider.addProperty("type", "ttf"); provider.addProperty("file", providerFile());
-        JsonArray shift = new JsonArray(); shift.add(x); shift.add(y); provider.add("shift", shift);
-        provider.addProperty("size", size); provider.addProperty("oversample", oversample);
+        provider.addProperty("type", "ttf");
+        provider.addProperty("file", providerFile());
+        JsonArray shift = new JsonArray();
+        shift.add(x);
+        shift.add(y);
+        provider.add("shift", shift);
+        provider.addProperty("size", size);
+        provider.addProperty("oversample", oversample);
         return provider;
     }
 

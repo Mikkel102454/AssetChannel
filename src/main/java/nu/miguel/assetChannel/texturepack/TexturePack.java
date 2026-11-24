@@ -9,11 +9,11 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-import java.util.UUID;
 
 public class TexturePack {
     static final int RESOURCE_PACK_FORMAT_MAJOR = 97;
@@ -36,7 +36,8 @@ public class TexturePack {
             createMetaData();
 
         } catch (IOException | UncheckedIOException e) {
-            throw new IllegalStateException("Failed to initialize texture-pack staging directory", e);
+            throw new IllegalStateException(
+                    "Failed to initialize texture-pack staging directory", e);
         }
     }
 
@@ -55,28 +56,21 @@ public class TexturePack {
 
     public Path publish() {
         Path zipPath = PathResolver.getPackZipPath();
-        Path temporaryZip = PathResolver.getGeneratedPath()
-                .resolve("pack.zip.tmp-" + UUID.randomUUID());
+        Path temporaryZip =
+                PathResolver.getGeneratedPath().resolve("pack.zip.tmp-" + UUID.randomUUID());
 
         try {
             Files.deleteIfExists(temporaryZip);
 
-            try (
-                    ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(temporaryZip));
-                    Stream<Path> files = Files.walk(rootPath)
-            ) {
-                files
-                        .filter(Files::isRegularFile)
+            try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(temporaryZip));
+                    Stream<Path> files = Files.walk(rootPath)) {
+                files.filter(Files::isRegularFile)
                         .forEach(file -> {
                             try {
-                                String entryName = rootPath
-                                        .relativize(file)
-                                        .toString()
-                                        .replace('\\', '/');
+                                String entryName =
+                                        rootPath.relativize(file).toString().replace('\\', '/');
 
-                                zipOut.putNextEntry(
-                                        new ZipEntry(entryName)
-                                );
+                                zipOut.putNextEntry(new ZipEntry(entryName));
 
                                 Files.copy(file, zipOut);
                                 zipOut.closeEntry();
@@ -88,10 +82,14 @@ public class TexturePack {
             }
 
             try {
-                Files.move(temporaryZip, zipPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                Files.move(
+                        temporaryZip,
+                        zipPath,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
                         java.nio.file.StandardCopyOption.ATOMIC_MOVE);
             } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-                Files.move(temporaryZip, zipPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                Files.move(
+                        temporaryZip, zipPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
             replaceDebugPack();
             return zipPath;
@@ -99,8 +97,9 @@ public class TexturePack {
         } catch (IOException | UncheckedIOException e) {
             throw new RuntimeException("Failed to create pack.zip", e);
         } finally {
-            try { Files.deleteIfExists(temporaryZip); }
-            catch (IOException e) {
+            try {
+                Files.deleteIfExists(temporaryZip);
+            } catch (IOException e) {
                 Logger.log(Level.WARNING, "Could not clean temporary pack ZIP: " + e.getMessage());
             }
         }
@@ -108,14 +107,15 @@ public class TexturePack {
 
     static String metadata(int major, int minor, String description) {
         return """
-                {
-                  "pack": {
-                    "min_format": [%d, %d],
-                    "max_format": [%d, %d],
-                    "description": "%s"
-                  }
-                }
-                """.formatted(major, minor, major, minor, description);
+        {
+          "pack": {
+            "min_format": [%d, %d],
+            "max_format": [%d, %d],
+            "description": "%s"
+          }
+        }
+        """
+                .formatted(major, minor, major, minor, description);
     }
 
     private void replaceDebugPack() {
@@ -133,7 +133,10 @@ public class TexturePack {
             } catch (IOException rollback) {
                 e.addSuppressed(rollback);
             }
-            Logger.log(Level.WARNING, "Pack ZIP was published, but its debug directory could not be replaced: " + e.getMessage());
+            Logger.log(
+                    Level.WARNING,
+                    "Pack ZIP was published, but its debug directory could not be replaced: "
+                            + e.getMessage());
             deleteTree(rootPath);
         }
     }
@@ -141,12 +144,21 @@ public class TexturePack {
     private static void deleteTree(Path root) {
         if (!Files.exists(root)) return;
         try (Stream<Path> paths = Files.walk(root)) {
-            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
-                try { Files.deleteIfExists(path); }
-                catch (IOException e) { throw new UncheckedIOException(e); }
-            });
+            paths.sorted(Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    });
         } catch (IOException | UncheckedIOException e) {
-            Logger.log(Level.WARNING, "Could not clean generated directory " + root.getFileName() + ": " + e.getMessage());
+            Logger.log(
+                    Level.WARNING,
+                    "Could not clean generated directory "
+                            + root.getFileName()
+                            + ": "
+                            + e.getMessage());
         }
     }
 
