@@ -30,8 +30,6 @@ public final class AssetChannelApiImpl implements AssetChannelApi {
                 effectCurve(id)
                         .orElseThrow(
                                 () -> new IllegalArgumentException("Unknown effect asset: " + id));
-        if (curve.client() == null)
-            throw new IllegalArgumentException("Effect asset has no client animation: " + id);
         return clientEffects.acquire(player, curve.client());
     }
 

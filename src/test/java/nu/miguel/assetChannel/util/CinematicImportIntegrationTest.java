@@ -69,7 +69,8 @@ class CinematicImportIntegrationTest {
                         zip.getEntry(
                                 "assets/assetchannel/font/generated/captions/ui/subtitle/outline/lower.json"));
                 assertNotNull(
-                        zip.getEntry("assets/assetchannel/post_effect/cinematic/zoom/123.json"));
+                        zip.getEntry(
+                                "assets/assetchannel/post_effect/generated/composite/cinematic/screen/render/31.json"));
                 assertNotNull(
                         zip.getEntry(
                                 "assets/assetchannel/items/generated/rigs/learning/part_19.json"));
@@ -77,9 +78,11 @@ class CinematicImportIntegrationTest {
             byte[] published = Files.readAllBytes(root.resolve("generated/pack.zip"));
             Files.writeString(
                     root.resolve("packs/main/definitions/effects/missing.yml"),
-                    "kind: ZOOM\nprofiles:\n  '1.0': absent:zoom/one\n");
+                    Files.readString(
+                                    Path.of("examples/cinematic-pack/definitions/effects/zoom.yml"))
+                            .replace("cinematic:post/composite", "missing:broken"));
             var error = assertThrows(IllegalArgumentException.class, PackDeveloper::createPack);
-            assertTrue(error.getMessage().contains("absent:zoom/one"));
+            assertTrue(error.getMessage().contains("missing:broken"));
             assertArrayEquals(
                     published,
                     Files.readAllBytes(root.resolve("generated/pack.zip")),
@@ -120,6 +123,21 @@ class CinematicImportIntegrationTest {
                     assets.stream()
                             .anyMatch(a ->
                                     a instanceof TimelineAudio && a.getId().equals("demo.line")));
+            try (var zip = new ZipFile(root.resolve("generated/pack.zip").toFile())) {
+                assertNotNull(
+                        zip.getEntry(
+                                "assets/assetchannel/post_effect/generated/composite/cinematic/screen/render/31.json"));
+                assertFalse(
+                        zip.stream()
+                                .anyMatch(entry ->
+                                        entry.getName()
+                                                .startsWith(
+                                                        "assets/assetchannel/post_effect/cinematic/zoom/")));
+                assertFalse(
+                        zip.stream()
+                                .anyMatch(entry ->
+                                        entry.getName().contains("interpolated_zoom.fsh")));
+            }
         } finally {
             Main.plugin = previousPlugin;
             Main.config = previousConfig;

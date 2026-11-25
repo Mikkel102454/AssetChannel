@@ -13,7 +13,7 @@ Use Java 25. On Windows replace `./gradlew` with `./gradlew.bat`. AnimationChann
 
 `formatJava` uses pinned google-java-format 2.0.0 with AOSP four-space indentation. It formats production/tests/example Java and removes unused imports; `.editorconfig` supplies matching editor defaults. `checkJavaFormat` is read-only and fails when a source needs formatting. Compile tasks run after formatting when both are requested. Catalog contracts live under `api/`; source parsers, pack assembly, playback/session implementations and operator commands have separate packages. AnimationChannel owns the cutscene editor.
 
-Follow the project's applicable agent/contributor guidance. Add focused regressions for behaviour changes, run the relevant checks, then broaden when shared code warrants it. Pure formatting does not need tests that restate the formatter. Keep API compatibility constructors/default methods where consumers may depend on them. Do not rewrite source media or use generated/cache directories as authoring inputs.
+Follow the project's applicable agent/contributor guidance. Add focused regressions for behaviour changes, run the relevant checks, then broaden when shared code warrants it. Pure formatting does not need tests that restate the formatter. Keep the current API contract explicit; remove obsolete protocol branches and placeholder implementations. Do not rewrite source media or use generated/cache directories as authoring inputs.
 
 ## Build these MkDocs pages
 
@@ -36,7 +36,7 @@ Both sites use [MkDocs](https://www.mkdocs.org/user-guide/configuration/) with s
 
 Unit tests do not prove connected-client appearance. Use a separate test server and the correct accepted resource pack. Confirm model textures/placement, font metrics and decorations, audio timing, shaders, pause/seek, audience isolation, and restoration after stop/error/disconnect. For editor changes, test a paginated timeline: time stepping, form save/back, invalid values, chat cancel, and changing drafts while a response is pending.
 
-AssetChannel's `clientPreflight` task compiles imported shaders through an installed Minecraft 26.3 client. Its native/GPU/font probe scripts are under `examples/client-zoom-probe/`. AnimationChannel's `diagnose` probes native renderer/transport construction, while `prepare <scene>` checks real chunk loading and delayed retention. These are different checks. Detached benchmarks omit connected-client serialization, network/chunk load and client FPS.
+AssetChannel's `clientPreflight` task compiles imported shaders through an installed Minecraft 26.3 client. Its native/GPU/font probe scripts are under `examples/client-probe/`. AnimationChannel's `diagnose` probes native renderer/transport construction, while `prepare <scene>` checks real chunk loading and delayed retention. These are different checks. Detached benchmarks omit connected-client serialization, network/chunk load and client FPS.
 
 ## Publication and ownership
 

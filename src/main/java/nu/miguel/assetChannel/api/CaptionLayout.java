@@ -175,20 +175,4 @@ public final class CaptionLayout {
         }
         return result;
     }
-
-    /** An explicit imported asset is required; implicit default-font rendering was removed. */
-    @Deprecated
-    public static List<Component> wrap(Component content, int width) {
-        throw new IllegalStateException("Select an imported CaptionFontAsset");
-    }
-
-    @Deprecated
-    public static int width(Component content) {
-        throw new IllegalStateException("Select an imported CaptionFontAsset");
-    }
-
-    @Deprecated
-    public static Component compose(Component upper, Component lower) {
-        throw new IllegalStateException("Select an imported CaptionFontAsset");
-    }
 }

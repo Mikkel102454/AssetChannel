@@ -7,9 +7,12 @@ import nu.miguel.assetChannel.texturepack.TexturePack;
 
 import org.bukkit.configuration.file.YamlConfiguration;
 
+import java.io.IOException;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.Locale;
+import java.util.Objects;
 
+/** Loads the current compositor contract directly from imported asset definitions. */
 public final class EffectCurve implements Asset {
     private final EffectCurveAsset descriptor;
 
@@ -17,47 +20,46 @@ public final class EffectCurve implements Asset {
         this.descriptor = descriptor;
     }
 
-    public static EffectCurve load(String id, Path path) throws java.io.IOException {
+    public static EffectCurve load(String id, Path path) throws IOException {
         var yaml = new YamlConfiguration();
         yaml.options().pathSeparator('/');
         try {
             yaml.load(path.toFile());
         } catch (org.bukkit.configuration.InvalidConfigurationException error) {
-            throw new java.io.IOException(path + ": " + error.getMessage(), error);
+            throw new IOException(path + ": " + error.getMessage(), error);
         }
-        var section =
-                Objects.requireNonNull(
-                        yaml.getConfigurationSection("profiles"),
-                        "Missing effect profiles: " + path);
-        var profiles = new TreeMap<Double, Key>();
-        section.getValues(false)
-                .forEach((value, key) -> {
-                    if (profiles.putIfAbsent(Double.parseDouble(value), Key.key(key.toString()))
-                            != null)
-                        throw new IllegalArgumentException("Duplicate effect value: " + value);
-                });
+        if (yaml.contains("profiles")
+                || !yaml.getString("client/protocol", "").equals("clock-composite-v1"))
+            throw new IllegalArgumentException(
+                    path + ": expected clock-composite-v1 with an explicit range");
         var kind =
                 EffectCurveAsset.Kind.valueOf(yaml.getString("kind", "").toUpperCase(Locale.ROOT));
-        ClientEffectAsset client = null;
-        if (yaml.isConfigurationSection("client")) {
-            var config = yaml.getConfigurationSection("client");
-            if (kind != EffectCurveAsset.Kind.ZOOM
-                    || !Set.of("clock-zoom-v1", "clock-zoom-v2")
-                            .contains(config.getString("protocol", "")))
-                throw new IllegalArgumentException("Unsupported client effect protocol: " + path);
-            client =
-                    new ClientEffectAsset(
-                            Key.key("assetchannel:generated/client/" + id.replace('.', '/')),
-                            Key.key(Objects.requireNonNull(config.getString("writer-vertex"))),
-                            Key.key(Objects.requireNonNull(config.getString("writer-fragment"))),
-                            Key.key(Objects.requireNonNull(config.getString("vertex-shader"))),
-                            Key.key(Objects.requireNonNull(config.getString("fragment-shader"))),
-                            Key.key(Objects.requireNonNull(config.getString("copy-shader"))),
-                            profiles.firstKey(),
-                            profiles.lastKey(),
-                            config.getString("protocol", "").equals("clock-zoom-v2") ? 2 : 1);
-        }
-        return new EffectCurve(new EffectCurveAsset(id, kind, profiles, client));
+        var group = key(yaml, "client/group");
+        var composition =
+                new ClientEffectComposition(
+                        Key.key(
+                                "assetchannel",
+                                "generated/composite/" + group.namespace() + "/" + group.value()),
+                        key(yaml, "client/vertex-shader"),
+                        key(yaml, "client/fragment-shader"),
+                        kind,
+                        yaml.getDouble("neutral", Double.NaN));
+        var client =
+                new ClientEffectAsset(
+                        Key.key("assetchannel:generated/client/" + id.replace('.', '/')),
+                        key(yaml, "client/writer-vertex"),
+                        key(yaml, "client/writer-fragment"),
+                        key(yaml, "client/copy-vertex"),
+                        key(yaml, "client/copy-fragment"),
+                        yaml.getDouble("range/min", Double.NaN),
+                        yaml.getDouble("range/max", Double.NaN),
+                        composition);
+        return new EffectCurve(new EffectCurveAsset(id, client));
+    }
+
+    private static Key key(YamlConfiguration yaml, String path) {
+        return Key.key(
+                Objects.requireNonNull(yaml.getString(path), "Missing effect field: " + path));
     }
 
     public EffectCurveAsset descriptor() {

@@ -1,45 +1,31 @@
 package nu.miguel.assetChannel.api;
 
-import net.kyori.adventure.key.Key;
+import java.util.Objects;
 
-import java.util.*;
-
-/** Numeric presentation controls mapped to imported native post-effect resources. */
-public record EffectCurveAsset(
-        String id, Kind kind, NavigableMap<Double, Key> profiles, ClientEffectAsset client) {
-    public EffectCurveAsset(String id, Kind kind, NavigableMap<Double, Key> profiles) {
-        this(id, kind, profiles, null);
-    }
-
+/** An imported, continuously animated screen-effect channel. */
+public record EffectCurveAsset(String id, ClientEffectAsset client) {
     public enum Kind {
         ZOOM,
-        FADE
+        FADE,
+        LETTERBOX,
+        DESATURATION,
+        VIGNETTE
     }
 
     public EffectCurveAsset {
         Objects.requireNonNull(id);
-        Objects.requireNonNull(kind);
-        profiles = Collections.unmodifiableNavigableMap(new TreeMap<>(profiles));
-        if (profiles.isEmpty() || profiles.keySet().stream().anyMatch(v -> !Double.isFinite(v)))
-            throw new IllegalArgumentException("Effect curve needs finite profiles");
+        Objects.requireNonNull(client);
+    }
+
+    public Kind kind() {
+        return client.composition().channel();
     }
 
     public double minimum() {
-        return profiles.firstKey();
+        return client.minimum();
     }
 
     public double maximum() {
-        return profiles.lastKey();
-    }
-
-    public Key key(double value) {
-        if (!Double.isFinite(value)) throw new IllegalArgumentException("Invalid effect value");
-        var before = profiles.floorEntry(value);
-        var after = profiles.ceilingEntry(value);
-        if (before == null) return after.getValue();
-        if (after == null) return before.getValue();
-        return value - before.getKey() < after.getKey() - value
-                ? before.getValue()
-                : after.getValue();
+        return client.maximum();
     }
 }

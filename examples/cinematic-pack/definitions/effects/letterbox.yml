@@ -1,0 +1,12 @@
+kind: LETTERBOX
+range: {min: 0, max: 1}
+neutral: 0
+client:
+  protocol: clock-composite-v1
+  group: cinematic:screen
+  writer-vertex: cinematic:post/control_pixel
+  writer-fragment: cinematic:post/control_value
+  vertex-shader: cinematic:post/composite
+  fragment-shader: cinematic:post/composite
+  copy-vertex: minecraft:core/screenquad
+  copy-fragment: minecraft:post/blit

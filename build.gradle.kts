@@ -100,7 +100,7 @@ val apiJar = tasks.register<Jar>("apiJar") {
 tasks.register<Exec>("clientPreflight") {
     group = "verification"
     description = "Compile imported post-effect shaders through an installed Minecraft 26.3 client."
-    commandLine("powershell.exe", "-NoProfile", "-File", file("examples/client-zoom-probe/run-native-probe.ps1").absolutePath)
+    commandLine("powershell.exe", "-NoProfile", "-File", file("examples/client-probe/run-native-probe.ps1").absolutePath)
     providers.gradleProperty("preflightPack").orNull?.let { args("-AssetsPath", file(it).absolutePath) }
 }
 
@@ -148,7 +148,7 @@ val apiJavadoc = tasks.register<Javadoc>("apiJavadoc") {
         memberLevel = JavadocMemberLevel.PUBLIC
     }
 }
-tasks.register<Copy>("stageApiDocs") {
+tasks.register<Sync>("stageApiDocs") {
     group = "documentation"
     description = "Stage generated API HTML as static files for the MkDocs site."
     dependsOn(apiJavadoc)

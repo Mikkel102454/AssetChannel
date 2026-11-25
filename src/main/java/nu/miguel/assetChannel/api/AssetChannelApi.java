@@ -6,178 +6,103 @@ import org.bukkit.entity.Player;
 import java.util.*;
 
 public interface AssetChannelApi {
-    default Collection<RigAsset> rigs() {
-        return List.of();
-    }
+    Collection<RigAsset> rigs();
 
-    default Optional<RigAsset> rig(String id) {
-        return Optional.empty();
-    }
+    Optional<RigAsset> rig(String id);
 
-    default UUID packRevision() {
-        return new UUID(0, 0);
-    }
+    UUID packRevision();
 
-    default AssetPreflightReport preflight() {
-        return new AssetPreflightReport(packRevision(), false, 0, 0, List.of());
-    }
+    AssetPreflightReport preflight();
 
-    default Collection<TimelineAudioAsset> timelineAudio() {
-        return List.of();
-    }
+    Collection<TimelineAudioAsset> timelineAudio();
 
-    default Optional<TimelineAudioAsset> timelineAudio(String id) {
-        return Optional.empty();
-    }
+    Optional<TimelineAudioAsset> timelineAudio(String id);
 
-    default AudioLease leaseAudio(Player player, String id) {
-        throw new UnsupportedOperationException();
-    }
+    AudioLease leaseAudio(Player player, String id);
 
-    default EffectHandle showPostEffect(Player player, String key) {
-        throw new UnsupportedOperationException();
-    }
+    EffectHandle showPostEffect(Player player, String key);
 
-    default TitleLease reserveTitle(Player player) {
-        throw new UnsupportedOperationException();
-    }
+    TitleLease reserveTitle(Player player);
 
-    default ActionBarLease reserveActionBar(Player player) {
-        throw new UnsupportedOperationException();
-    }
+    ActionBarLease reserveActionBar(Player player);
 
-    default Collection<CaptionFontAsset> captionFonts() {
-        return List.of();
-    }
+    Collection<CaptionFontAsset> captionFonts();
 
-    default Optional<CaptionFontAsset> captionFont(String id) {
-        return Optional.empty();
-    }
+    Optional<CaptionFontAsset> captionFont(String id);
 
-    default Collection<ScreenFontAsset> screenFonts() {
-        return List.of();
-    }
+    Collection<ScreenFontAsset> screenFonts();
 
-    default Optional<ScreenFontAsset> screenFont(String id) {
-        return Optional.empty();
-    }
+    Optional<ScreenFontAsset> screenFont(String id);
 
-    default Collection<EffectCurveAsset> effectCurves() {
-        return List.of();
-    }
+    Collection<EffectCurveAsset> effectCurves();
 
-    default Optional<EffectCurveAsset> effectCurve(String id) {
-        return Optional.empty();
-    }
+    Optional<EffectCurveAsset> effectCurve(String id);
 
-    /** Acquires an imported clock-driven zoom asset; one lease per player. */
-    default ClientEffectLease leaseClientEffect(Player player, String curveId) {
-        throw new UnsupportedOperationException();
-    }
+    /** Acquires an imported compositor channel: one zoom/roll lease and one per scalar asset. */
+    ClientEffectLease leaseClientEffect(Player player, String curveId);
 
-    default Collection<ResourceAsset> resources() {
-        return List.of();
-    }
+    Collection<ResourceAsset> resources();
 
     default Collection<ResourceAsset> resources(ResourceKind kind) {
         return resources().stream().filter(resource -> resource.kind() == kind).toList();
     }
 
-    default Collection<BlockAsset> blocks() {
-        return List.of();
-    }
+    Collection<BlockAsset> blocks();
 
-    default Optional<BlockAsset> block(String id) {
-        return Optional.empty();
-    }
+    Optional<BlockAsset> block(String id);
 
-    default boolean isPackReady(Player player) {
-        return false;
-    }
+    boolean isPackReady(Player player);
 
-    default org.bukkit.entity.ItemDisplay spawnItemDisplay(
-            org.bukkit.Location location, String model, DisplayOptions options) {
-        throw new UnsupportedOperationException();
-    }
+    org.bukkit.entity.ItemDisplay spawnItemDisplay(
+            org.bukkit.Location location, String model, DisplayOptions options);
 
-    default org.bukkit.entity.BlockDisplay spawnBlockDisplay(
+    org.bukkit.entity.BlockDisplay spawnBlockDisplay(
             org.bukkit.Location location,
             org.bukkit.block.data.BlockData data,
-            DisplayOptions options) {
-        throw new UnsupportedOperationException();
-    }
+            DisplayOptions options);
 
-    default boolean removeDisplay(UUID id) {
-        throw new UnsupportedOperationException();
-    }
+    boolean removeDisplay(UUID id);
 
-    default Collection<org.bukkit.entity.Display> displays() {
-        return List.of();
-    }
+    Collection<org.bukkit.entity.Display> displays();
 
-    default PlacedAssetBlock placeBlock(org.bukkit.Location location, String assetId) {
-        throw new UnsupportedOperationException();
-    }
+    PlacedAssetBlock placeBlock(org.bukkit.Location location, String assetId);
 
-    default Optional<PlacedAssetBlock> placedBlock(org.bukkit.Location location) {
-        return Optional.empty();
-    }
+    Optional<PlacedAssetBlock> placedBlock(org.bukkit.Location location);
 
     /** Removes without drops; effects are optional. Does not overwrite external block changes. */
-    default boolean removeBlock(org.bukkit.Location location, boolean effects) {
-        throw new UnsupportedOperationException();
-    }
+    boolean removeBlock(org.bukkit.Location location, boolean effects);
 
-    default org.bukkit.inventory.ItemStack createBlockItem(String assetId) {
-        throw new UnsupportedOperationException();
-    }
+    org.bukkit.inventory.ItemStack createBlockItem(String assetId);
 
     /** Shows a native-state asset to one pack-ready player without changing the real world. */
-    default BlockOverlay showBlockOverlay(
-            Player player, org.bukkit.Location location, String assetId) {
-        throw new UnsupportedOperationException();
-    }
+    BlockOverlay showBlockOverlay(Player player, org.bukkit.Location location, String assetId);
 
-    default Optional<BlockOverlay> blockOverlay(UUID id) {
-        return Optional.empty();
-    }
+    Optional<BlockOverlay> blockOverlay(UUID id);
 
-    default Collection<BlockOverlay> blockOverlays(Player player) {
-        return List.of();
-    }
+    Collection<BlockOverlay> blockOverlays(Player player);
 
     /** Typed vanilla particles, sent only to nearby players with the active pack. */
-    default <T> void spawnParticle(
-            org.bukkit.Location location, org.bukkit.Particle particle, int count, T data) {
-        throw new UnsupportedOperationException();
-    }
+    <T> void spawnParticle(
+            org.bukkit.Location location, org.bukkit.Particle particle, int count, T data);
 
     /**
      * Client crack overlay; use a distinct source ID per animation and progress zero to clear it.
      */
-    default void showBlockDamage(org.bukkit.Location location, float progress, int sourceId) {
-        throw new UnsupportedOperationException();
-    }
+    void showBlockDamage(org.bukkit.Location location, float progress, int sourceId);
 
     /** Plays a native sounds.json event key without requiring a generated SoundAsset. */
-    default PlaybackResult playResourceSound(
+    PlaybackResult playResourceSound(
             Player player,
             String key,
             SoundOrigin origin,
             SoundCategory category,
             float volume,
-            float pitch) {
-        throw new UnsupportedOperationException();
-    }
+            float pitch);
 
     /** Native item definitions, indexed by namespace:path. */
-    default Collection<ModelAsset> models() {
-        return List.of();
-    }
+    Collection<ModelAsset> models();
 
-    default Optional<ModelAsset> model(String id) {
-        return Optional.empty();
-    }
+    Optional<ModelAsset> model(String id);
 
     Collection<IconAsset> icons();
 

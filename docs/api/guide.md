@@ -274,11 +274,13 @@ Native imports cover resource-pack assets, not datapack recipes or mod-only regi
 
 `preflight()` returns an immutable `AssetPreflightReport` for the active catalog: revision, whether structural checks ran, resource/shader counts, and errors. Pack generation validates shader dependencies and post-effect structure transactionally. It does not claim GPU compilation on a server. The optional `clientPreflight` Gradle task checks a pack through an installed Minecraft client's compiler.
 
-`captionFonts()` / `captionFont(id)` expose immutable metrics and decoration variants derived from imported font files. `CaptionAppearance(outline, shadow, box)` selects independent decorations; box support requires an imported texture. `CaptionLayout.wrap`, `width` and `compose` now take the selected `CaptionFontAsset`; deprecated overloads without an asset throw instead of choosing an implicit font.
+`captionFonts()` / `captionFont(id)` expose immutable metrics and decoration variants derived from imported font files. `CaptionAppearance(outline, shadow, box)` selects independent decorations; box support requires an imported texture. `CaptionLayout.wrap`, `width` and `compose` require the selected `CaptionFontAsset`.
 
-`effectCurves()` / `effectCurve(id)` expose imported zoom/fade definitions and their native profile keys. Other plugins can sample `EffectCurveAsset.key(value)` and acquire a normal post-effect lease. AssetChannel generates no authored font or shader fallback. See [cinematic imports and API examples](../assets/cinematics.md).
+`effectCurves()` / `effectCurve(id)` expose imported compositor definitions, their channels and numeric bounds. Other plugins animate them through `leaseClientEffect`. AssetChannel generates no authored font or shader fallback. See [cinematic imports and API examples](../assets/cinematics.md).
 
 For curves with a `ClientEffectAsset`, use `leaseClientEffect(player, curveId)` and `ClientEffectLease.show(EffectAnimation)` to animate on the client's render clock. `EffectAnimation` supplies endpoints, linear progress, total duration in ticks, and easing; a zero duration holds that progress. Close the exclusive lease afterwards. See the same guide for synchronization and protocol requirements.
+
+`ClientEffectAsset.composition()` describes the required imported `ClientEffectComposition`. Current-protocol leases automatically share a renderer and skip frozen neutral effects. `EffectCurveAsset(id, client)` has no preset map. Use `ownedPrefixes()` for recovery and `decodeFrame` for timing metadata. The [compositor contract](../assets/cinematics.md#shared-rendering-and-transport) documents authoring and benchmarking.
 
 Positioned text: use `screenFonts()` / `screenFont(id)` to resolve imported `ScreenFontAsset` descriptors, then `ScreenTextLayout.place` to compose zero-advance labels on a reserved action bar. Font sidecars configure size and available Y rows. See [cinematics](../assets/cinematics.md#positioned-screen-font-assets).
 

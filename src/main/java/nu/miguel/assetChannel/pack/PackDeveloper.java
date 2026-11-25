@@ -114,25 +114,6 @@ public class PackDeveloper {
     }
 
     static void validateAssets(List<Asset> assets) {
-        Set<String> postEffects =
-                assets.stream()
-                        .filter(ImportedResources.class::isInstance)
-                        .map(ImportedResources.class::cast)
-                        .flatMap(r -> r.resources().stream())
-                        .filter(r ->
-                                r.kind() == nu.miguel.assetChannel.api.ResourceKind.POST_EFFECT)
-                        .map(r -> r.key().asString())
-                        .collect(java.util.stream.Collectors.toSet());
-        for (Asset asset : assets)
-            if (asset instanceof EffectCurve curve)
-                for (var key : curve.descriptor().profiles().values())
-                    if (!postEffects.contains(
-                            key.namespace() + ":post_effect/" + key.value() + ".json"))
-                        throw new IllegalArgumentException(
-                                "Effect curve "
-                                        + curve.getId()
-                                        + " references missing imported post effect "
-                                        + key);
         NativeBlockStates.validate(assets);
         Set<String> itemModels =
                 assets.stream()

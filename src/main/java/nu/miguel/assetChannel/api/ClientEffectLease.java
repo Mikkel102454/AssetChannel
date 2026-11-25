@@ -1,8 +1,12 @@
 package nu.miguel.assetChannel.api;
 
-/** Exclusive client zoom control for one viewer. Calls require the server thread. */
+/**
+ * One viewer's effect channel: one zoom/roll lease, plus one per scalar asset. Server thread only.
+ */
 public interface ClientEffectLease extends AutoCloseable {
     void show(EffectAnimation animation);
+
+    void show(ClientEffectFrame frame);
 
     boolean closed();
 

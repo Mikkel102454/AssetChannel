@@ -2,7 +2,7 @@ package nu.miguel.assetChannel.api;
 
 import java.util.Objects;
 
-/** A zoom curve evaluated by the client between synchronized scene-clock updates. */
+/** A numeric effect curve evaluated by the client between synchronized scene-clock updates. */
 public record EffectAnimation(
         double from,
         double to,
@@ -53,15 +53,19 @@ public record EffectAnimation(
             throw new IllegalArgumentException("Invalid client effect animation");
     }
 
-    /** GameTime wraps every 24,000 ticks. Rebase running animations at least once per cycle. */
+    /** GameTime wraps every 24,000 ticks. Keep running anchors less than 12,000 ticks old. */
+    public static double elapsedTicks(double anchor, double clientTick) {
+        return ((clientTick - anchor + 12000) % 24000 + 24000) % 24000 - 12000;
+    }
+
     public double value(double synchronizedTick, double clientTick) {
-        double elapsed = ((clientTick - synchronizedTick) % 24000 + 24000) % 24000;
+        double elapsed = elapsedTicks(synchronizedTick, clientTick);
         double t = durationTicks == 0 ? progress : progress + elapsed / durationTicks;
         return from + (to - from) * easing.apply(t);
     }
 
     public double rollAt(double synchronizedTick, double clientTick) {
-        double elapsed = ((clientTick - synchronizedTick) % 24000 + 24000) % 24000;
+        double elapsed = elapsedTicks(synchronizedTick, clientTick);
         return roll
                 + (((nextRoll - roll) % 360 + 540) % 360 - 180)
                         * (rollInterpolated ? Math.clamp(elapsed, 0, 1) : 0);

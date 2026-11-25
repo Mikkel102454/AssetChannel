@@ -2,21 +2,11 @@ package nu.miguel.assetChannel.api;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import net.kyori.adventure.key.Key;
-
 import org.junit.jupiter.api.Test;
 
 class ClientEffectAssetTest {
     static ClientEffectAsset asset() {
-        return new ClientEffectAsset(
-                Key.key("test:control"),
-                Key.key("test:writer"),
-                Key.key("test:value"),
-                Key.key("test:screen"),
-                Key.key("test:zoom"),
-                Key.key("test:copy"),
-                1,
-                4);
+        return EffectTestAssets.zoom();
     }
 
     @Test
@@ -25,14 +15,15 @@ class ClientEffectAssetTest {
         var value =
                 new EffectAnimation(1.12345, 2.6789, .42, 72000, EffectAnimation.Easing.SMOOTHER);
         byte[] bytes = asset.encode(value, 24007);
-        var decoded = asset.decode(bytes);
+        var decoded = asset.decodeFrame(bytes);
         assertEquals(value.from(), decoded.animation().from(), .00005);
         assertEquals(value.to(), decoded.animation().to(), .00005);
         assertEquals(.42, decoded.animation().progress(), .00002);
         assertEquals(72000, decoded.animation().durationTicks());
-        assertEquals(7, decoded.gameTick());
+        assertEquals(7, decoded.curveTick());
         assertEquals(value.easing(), decoded.animation().easing());
-        assertEquals(ClientEffectAsset.CONTROL_BYTES + 1, asset.keys(bytes).size());
+        assertEquals(asset.reset(), asset.keys(bytes).getFirst());
+        assertEquals(asset.renderer(), asset.keys(bytes).getLast());
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
